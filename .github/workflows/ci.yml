@@ -61,22 +61,21 @@ jobs:
         if: ${{ env.ACT }}
         shell: bash
         run: |
-          mkdir -p src-tauri/target/release/bundle/nsis src-tauri/target/release/bundle/msi
+          mkdir -p src-tauri/target/release/bundle/nsis src-tauri/target/release/bundle/msi src-tauri/target/release
+          printf 'dummy exe' > 'src-tauri/target/release/s2akit.exe'
           printf 'dummy nsis' > 'src-tauri/target/release/bundle/nsis/s2akit_0.1.0_x64-setup.exe'
           printf 'dummy msi' > 'src-tauri/target/release/bundle/msi/s2akit_0.1.0_x64_en-US.msi'
 
-      - name: Package zip
+      # portable 版：Tauri 已把前端资源嵌进 exe，裸 exe 解压即可运行
+      - name: Package portable zip
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          $nsis = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
-          $msi = Get-ChildItem 'src-tauri/target/release/bundle/msi/*.msi' | Select-Object -First 1
-          if (-not $nsis) { throw 'NSIS installer not found' }
-          if (-not $msi) { throw 'MSI installer not found' }
-          $zip = "s2akit_${version}_windows-x64.zip"
-          Compress-Archive -Path $nsis.FullName, $msi.FullName -DestinationPath $zip -Force
-          Add-Content -Path $env:GITHUB_ENV -Value "ZIP_NAME=$zip"
+          $exe = Get-Item 'src-tauri/target/release/s2akit.exe'
+          $zip = "s2akit_${version}_windows-x64_portable.zip"
+          Compress-Archive -Path $exe.FullName -DestinationPath $zip -Force
+          Add-Content -Path $env:GITHUB_ENV -Value "PORTABLE_ZIP=$zip"
           Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version"
           Write-Host "packaged $zip"
 
@@ -93,6 +92,10 @@ jobs:
           $short = $sha.Substring(0, 7)
           $title = "s2akit CI build (v$env:APP_VERSION, $short)"
           $notes = "push 自动构建。`n- commit: $short`n- 分支: ${{ github.ref_name }}`n- 运行: #${{ github.run_number }}"
+          $nsis = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
+          $msi = Get-ChildItem 'src-tauri/target/release/bundle/msi/*.msi' | Select-Object -First 1
+          if (-not $nsis) { throw 'NSIS installer not found' }
+          if (-not $msi) { throw 'MSI installer not found' }
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --title $title --prerelease --target $sha --notes $notes
@@ -105,11 +108,14 @@ jobs:
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
           }
-          gh release upload $tag $env:ZIP_NAME --clobber
+          gh release upload $tag "$($nsis.FullName)" "$($msi.FullName)" "$env:PORTABLE_ZIP" --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Preview release commands (act)
         if: ${{ env.ACT }}
         shell: bash
         run: |
-          echo "[act] would update rolling release 'ci-latest' and upload: ${ZIP_NAME:-<unset>}"
+          echo "[act] would update rolling release 'ci-latest' and upload 3 assets:"
+          echo "[act]   - NSIS setup exe (loose)"
+          echo "[act]   - MSI installer (loose)"
+          echo "[act]   - portable zip: ${PORTABLE_ZIP:-<unset>}"
