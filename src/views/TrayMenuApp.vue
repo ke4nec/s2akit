@@ -74,11 +74,14 @@ function onHeaderClick() {
   view.value = view.value === "groups" ? "accounts" : "groups";
 }
 
-async function reload() {
+/** 重新加载菜单数据；refreshUsage=true 绕过后端缓存强制刷新顶部额度 */
+async function reload(refreshUsage = false) {
   closeSubmenu();
   loading.value = true;
   // 用量查询与账号列表并行，不阻塞主内容加载
-  const usageP = invoke<KeyUsageToday | null>("get_key_usage_today").catch(() => null);
+  const usageP = invoke<KeyUsageToday | null>("get_key_usage_today", {
+    force: refreshUsage,
+  }).catch(() => null);
   const resultsP = invoke<Record<string, TestResult>>("get_last_results").catch(() => ({}));
   try {
     accounts.value = await invoke<AccountBrief[]>("list_accounts", { groupId: null });
@@ -415,7 +418,7 @@ onBeforeUnmount(() => {
             </template>
             <v-list-item-title class="text-caption">测试全部账号</v-list-item-title>
           </v-list-item>
-          <v-list-item density="compact" @click="reload">
+          <v-list-item density="compact" @click="() => reload(true)">
             <template #prepend>
               <v-icon icon="mdi-refresh" size="16" />
             </template>

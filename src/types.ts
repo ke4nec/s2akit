@@ -8,6 +8,8 @@ export interface AppConfig {
   test_timeout_secs: number;
   test_concurrency: number;
   menu_opacity: number;
+  /** 托盘菜单顶部用量刷新间隔（分钟），默认 10，范围 1-1440 */
+  usage_refresh_minutes: number;
   /** Rust 侧维护（账号上次测试模型，account_id -> model_id），前端只读 */
   last_models?: Record<string, string>;
 }

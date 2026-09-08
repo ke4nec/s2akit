@@ -668,6 +668,9 @@ pub async fn save_config(app: AppHandle, mut config: AppConfig) -> AppResult<()>
     // 均以本地当前值为准，防止前端旧快照保存设置时把它们覆盖回旧值
     config.last_models = old.last_models.clone();
     config.menu_opacity = old.menu_opacity;
+    config.usage_refresh_minutes = config
+        .usage_refresh_minutes
+        .clamp(AppConfig::MIN_USAGE_REFRESH_MINUTES, AppConfig::MAX_USAGE_REFRESH_MINUTES);
     state.save_config(&config)?;
     drop(state);
     if old.base_url != config.base_url
@@ -951,16 +954,48 @@ pub struct KeyUsageToday {
 }
 
 /// 托盘菜单顶部展示：最近使用的 API Key 当天的用量（费用 + token 量）。
-/// 没有任何用量记录时返回 None（前端隐藏该行）。
+/// 结果按配置的刷新间隔（usage_refresh_minutes，默认 10 分钟）缓存，
+/// 间隔内重复打开菜单直接返回缓存；没有任何用量记录时返回 None（前端隐藏该行）。
+/// force=true 绕过缓存强制刷新（托盘菜单"刷新账号列表"用）。
 #[tauri::command]
-pub async fn get_key_usage_today(app: AppHandle) -> AppResult<Option<KeyUsageToday>> {
+pub async fn get_key_usage_today(
+    app: AppHandle,
+    force: Option<bool>,
+) -> AppResult<Option<KeyUsageToday>> {
     let state = app.state::<AppState>();
+    let ttl = Duration::from_secs(state.config_snapshot().usage_refresh_minutes_clamped() * 60);
+    if !force.unwrap_or(false) {
+        if let Some(cache) = state.usage_cache.read().unwrap().as_ref() {
+            if cache.fetched_at.elapsed() < ttl {
+                return Ok(cache.usage.clone());
+            }
+        }
+    }
     let (http, base) = (state.http.clone(), state.config_snapshot().base());
     drop(state);
 
+    let usage = match fetch_usage(&app, http, base).await {
+        Ok(usage) => usage,
+        // 拉取失败时退回旧缓存（宁可显示过期数据也不闪空），无缓存才报错
+        Err(e) => {
+            return match app.state::<AppState>().usage_cache.read().unwrap().clone() {
+                Some(cache) => Ok(cache.usage),
+                None => Err(e),
+            }
+        }
+    };
+    cache_usage(&app, usage.clone());
+    Ok(usage)
+}
+
+async fn fetch_usage(
+    app: &AppHandle,
+    http: reqwest::Client,
+    base: String,
+) -> AppResult<Option<KeyUsageToday>> {
     let http2 = http.clone();
     let base2 = base.clone();
-    let key = authed(&app, move |token| {
+    let key = authed(app, move |token| {
         let http = http2.clone();
         let base = base2.clone();
         async move { api::current_api_key(&http, &base, &token).await }
@@ -970,7 +1005,7 @@ pub async fn get_key_usage_today(app: AppHandle) -> AppResult<Option<KeyUsageTod
         return Ok(None);
     };
 
-    let stats = authed(&app, move |token| {
+    let stats = authed(app, move |token| {
         let http = http.clone();
         let base = base.clone();
         async move { api::key_usage_today(&http, &base, &token, key.id).await }
@@ -987,4 +1022,12 @@ pub async fn get_key_usage_today(app: AppHandle) -> AppResult<Option<KeyUsageTod
         total_tokens: stats.total_tokens,
         cost: stats.total_cost,
     }))
+}
+
+/// 记录/覆盖用量缓存（无任何用量记录的 None 也缓存，同样受间隔约束）
+fn cache_usage(app: &AppHandle, usage: Option<KeyUsageToday>) {
+    *app.state::<AppState>().usage_cache.write().unwrap() = Some(crate::state::UsageCache {
+        fetched_at: Instant::now(),
+        usage,
+    });
 }

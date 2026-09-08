@@ -15,6 +15,7 @@ function defaultConfig(): AppConfig {
     test_timeout_secs: 60,
     test_concurrency: 2,
     menu_opacity: 1,
+    usage_refresh_minutes: 10,
   };
 }
 
@@ -55,6 +56,7 @@ async function doSave() {
   }
   form.test_timeout_secs = Math.max(5, Number(form.test_timeout_secs) || 60);
   form.test_concurrency = Math.min(8, Math.max(1, Number(form.test_concurrency) || 2));
+  form.usage_refresh_minutes = Math.min(1440, Math.max(1, Math.round(Number(form.usage_refresh_minutes) || 10)));
   await saveConfig({ ...form });
 }
 
@@ -192,8 +194,8 @@ async function doSubmit2fa() {
         <header class="card-head">
           <v-icon icon="mdi-palette-outline" size="18" />
           <div class="card-head-text">
-            <div class="card-title">外观</div>
-            <div class="card-subtitle">调整后立即生效，右键任务栏图标查看效果</div>
+            <div class="card-title">托盘菜单</div>
+            <div class="card-subtitle">菜单外观与顶部额度刷新，右键任务栏图标查看效果</div>
           </div>
         </header>
         <div class="card-body">
@@ -215,6 +217,17 @@ async function doSubmit2fa() {
               }
             "
           />
+          <v-text-field
+            v-model.number="form.usage_refresh_minutes"
+            type="number"
+            label="额度刷新间隔（分钟）"
+            hint="托盘菜单顶部额度数据的缓存时长，间隔内重复打开菜单不再请求服务端；范围 1-1440，默认 10"
+            persistent-hint
+            density="compact"
+          />
+          <div class="card-actions">
+            <v-btn color="primary" :loading="store.saving" @click="doSave">保存</v-btn>
+          </div>
         </div>
       </section>
     </div>

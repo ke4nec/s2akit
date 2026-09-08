@@ -17,6 +17,8 @@ pub struct AppConfig {
     pub test_concurrency: usize,
     /// 托盘菜单窗口不透明度 0.3~1.0
     pub menu_opacity: f32,
+    /// 托盘菜单顶部额度信息的缓存时长（分钟），有效范围 1~1440
+    pub usage_refresh_minutes: u64,
     /// 每个账号上次测试实际使用的模型（account_id -> model_id），
     /// 作为该账号下次测试的默认模型
     pub last_models: HashMap<i64, String>,
@@ -34,12 +36,24 @@ impl Default for AppConfig {
             test_timeout_secs: 60,
             test_concurrency: 2,
             menu_opacity: 1.0,
+            usage_refresh_minutes: Self::DEFAULT_USAGE_REFRESH_MINUTES,
             last_models: HashMap::new(),
         }
     }
 }
 
 impl AppConfig {
+    /// 用量缓存时长的默认值与上下限（分钟）：默认 10 分钟，最短 1 分钟，最长 24 小时
+    pub const DEFAULT_USAGE_REFRESH_MINUTES: u64 = 10;
+    pub const MIN_USAGE_REFRESH_MINUTES: u64 = 1;
+    pub const MAX_USAGE_REFRESH_MINUTES: u64 = 24 * 60;
+
+    /// 夹取到有效范围的缓存时长，防止手改配置文件写入越界值
+    pub fn usage_refresh_minutes_clamped(&self) -> u64 {
+        self.usage_refresh_minutes
+            .clamp(Self::MIN_USAGE_REFRESH_MINUTES, Self::MAX_USAGE_REFRESH_MINUTES)
+    }
+
     pub fn load(path: &Path) -> Self {
         fs::read_to_string(path)
             .ok()

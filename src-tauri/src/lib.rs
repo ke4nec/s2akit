@@ -43,6 +43,7 @@ pub fn run() {
                 groups: RwLock::new(Vec::new()),
                 last_results: RwLock::new(std::collections::HashMap::new()),
                 testing: AtomicBool::new(false),
+                usage_cache: RwLock::new(None),
                 menu_alive: AtomicBool::new(true),
                 menu_anchor: std::sync::Mutex::new(None),
                 submenu_row_top: std::sync::Mutex::new(None),

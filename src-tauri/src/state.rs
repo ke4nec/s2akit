@@ -12,6 +12,13 @@ pub struct AuthEntry {
     pub expires_at: Instant,
 }
 
+/// 托盘菜单顶部用量缓存：在配置的刷新间隔内重复打开菜单不重复请求 API
+#[derive(Clone)]
+pub struct UsageCache {
+    pub fetched_at: Instant,
+    pub usage: Option<crate::commands::KeyUsageToday>,
+}
+
 pub struct AppState {
     pub http: reqwest::Client,
     pub config: RwLock<AppConfig>,
@@ -26,6 +33,8 @@ pub struct AppState {
     pub last_results: RwLock<HashMap<i64, TestResult>>,
     /// test_all 进行中标志（防止并发跑批）
     pub testing: AtomicBool,
+    /// 托盘菜单顶部用量缓存（TTL 由配置 usage_refresh_minutes 决定）
+    pub usage_cache: RwLock<Option<UsageCache>>,
     /// 托盘菜单页面是否存活（前端 pong 应答）。
     /// 开发构建加载 vite 服务器，服务器不在时 webview 会停留在错误页，
     /// 借此在下右键时触发重载自愈
