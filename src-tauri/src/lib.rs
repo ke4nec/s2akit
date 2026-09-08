@@ -4,6 +4,8 @@ mod error;
 mod state;
 mod sub2api;
 mod tray;
+#[cfg(windows)]
+mod win_toast;
 
 use config::AppConfig;
 use state::{AppState, AuthEntry};
@@ -42,9 +44,14 @@ pub fn run() {
                 last_results: RwLock::new(std::collections::HashMap::new()),
                 testing: AtomicBool::new(false),
                 menu_alive: AtomicBool::new(true),
+                menu_anchor: std::sync::Mutex::new(None),
             });
 
             tray::setup_tray(&handle)?;
+
+            // 注册通知 AUMID(开发/便携模式下让 Toast 显示应用图标而非 PowerShell)
+            #[cfg(windows)]
+            win_toast::ensure_aumid_shortcut(&handle);
 
             // 关闭窗口时隐藏到托盘，真正退出走托盘菜单
             if let Some(window) = app.get_webview_window("main") {
@@ -110,6 +117,7 @@ pub fn run() {
             commands::get_key_usage_today,
             commands::set_menu_opacity,
             commands::menu_pong,
+            commands::fit_menu,
             commands::open_main_window,
             commands::quit_app,
         ])

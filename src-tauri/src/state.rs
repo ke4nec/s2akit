@@ -30,6 +30,8 @@ pub struct AppState {
     /// 开发构建加载 vite 服务器，服务器不在时 webview 会停留在错误页，
     /// 借此在下右键时触发重载自愈
     pub menu_alive: AtomicBool,
+    /// 托盘菜单锚点：右键时的光标物理坐标，菜单窗口底角定位依据
+    pub menu_anchor: std::sync::Mutex<Option<(f64, f64)>>,
 }
 
 impl AppState {

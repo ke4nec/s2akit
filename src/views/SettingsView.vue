@@ -70,40 +70,40 @@ async function doSubmit2fa() {
 </script>
 
 <template>
-  <v-row>
-    <v-col cols="12" md="7">
-      <v-card elevation="0" :border="true">
-        <v-card-title class="text-subtitle-1">服务与管理员账号</v-card-title>
-        <v-card-text>
+  <div class="settings-grid">
+    <div class="settings-col">
+      <section class="glass-card settings-card animate-apple-fade-in">
+        <header class="card-head">
+          <v-icon icon="mdi-server" size="18" />
+          <div class="card-head-text">
+            <div class="card-title">服务与管理员账号</div>
+            <div class="card-subtitle">连接 sub2api 服务，凭据仅保存在本机配置文件</div>
+          </div>
+        </header>
+        <div class="card-body">
           <v-text-field
             v-model="form.base_url"
             label="sub2api 服务地址"
             hint="例如 http://127.0.0.1:8080"
             persistent-hint
             density="compact"
-            class="mb-2"
           />
           <v-text-field
             v-model="form.email"
             label="管理员邮箱"
             density="compact"
-            class="mb-2"
           />
           <v-text-field
             v-model="form.password"
             label="密码"
             type="password"
             density="compact"
-            hint="凭据保存在本机配置文件中"
-            persistent-hint
           />
-          <div class="d-flex ga-2 mt-4 flex-wrap">
-            <v-btn size="small" variant="text" :loading="store.saving" @click="doSave">
-              保存
-            </v-btn>
+          <div class="card-actions">
+            <v-btn variant="tonal" :loading="store.saving" @click="doSave">保存</v-btn>
             <v-btn
-              size="small"
               color="primary"
+              prepend-icon="mdi-login"
               :loading="store.loggingIn"
               @click="doSaveAndLogin"
             >
@@ -111,7 +111,6 @@ async function doSubmit2fa() {
             </v-btn>
             <v-btn
               v-if="store.auth"
-              size="small"
               variant="text"
               color="error"
               @click="logout()"
@@ -119,12 +118,18 @@ async function doSubmit2fa() {
               退出登录
             </v-btn>
           </div>
-        </v-card-text>
-      </v-card>
+        </div>
+      </section>
 
-      <v-card v-if="store.pending2fa" elevation="0" :border="true" class="mt-4">
-        <v-card-title class="text-subtitle-1">二步验证</v-card-title>
-        <v-card-text>
+      <section v-if="store.pending2fa" class="glass-card settings-card animate-apple-scale-in">
+        <header class="card-head">
+          <v-icon icon="mdi-shield-key-outline" size="18" />
+          <div class="card-head-text">
+            <div class="card-title">二步验证</div>
+            <div class="card-subtitle">输入验证器应用中的 6 位验证码完成登录</div>
+          </div>
+        </header>
+        <div class="card-body">
           <v-text-field
             v-model="totpCode"
             label="6 位验证码"
@@ -132,22 +137,29 @@ async function doSubmit2fa() {
             density="compact"
             style="max-width: 220px"
           />
-          <v-btn size="small" color="primary" @click="doSubmit2fa">验证并登录</v-btn>
-        </v-card-text>
-      </v-card>
-    </v-col>
+          <div class="card-actions">
+            <v-btn color="primary" @click="doSubmit2fa">验证并登录</v-btn>
+          </div>
+        </div>
+      </section>
+    </div>
 
-    <v-col cols="12" md="5">
-      <v-card elevation="0" :border="true">
-        <v-card-title class="text-subtitle-1">测速参数</v-card-title>
-        <v-card-text>
+    <div class="settings-col">
+      <section class="glass-card settings-card animate-apple-fade-in apple-delay-1">
+        <header class="card-head">
+          <v-icon icon="mdi-speedometer" size="18" />
+          <div class="card-head-text">
+            <div class="card-title">测速参数</div>
+            <div class="card-subtitle">控制账号批量测速的行为与判定</div>
+          </div>
+        </header>
+        <div class="card-body">
           <v-text-field
             v-model="form.default_model"
             label="默认测试模型"
             hint="留空自动选择：优先该账号上次测试的模型，其次平台默认（OpenAI→astra，Claude→opus），否则列表首个文本模型；填写的模型也须在该账号模型列表中才会生效"
             persistent-hint
             density="compact"
-            class="mb-2"
           />
           <v-text-field
             v-model="form.test_prompt"
@@ -155,32 +167,39 @@ async function doSubmit2fa() {
             hint="发给模型的提示词，建议保持极短"
             persistent-hint
             density="compact"
-            class="mb-2"
           />
-          <v-text-field
-            v-model.number="form.test_timeout_secs"
-            type="number"
-            label="单次测试超时（秒）"
-            density="compact"
-            class="mb-2"
-          />
-          <v-text-field
-            v-model.number="form.test_concurrency"
-            type="number"
-            label="批量测试并发数（1-8）"
-            density="compact"
-          />
-          <v-btn size="small" color="primary" :loading="store.saving" @click="doSave">
-            保存
-          </v-btn>
-        </v-card-text>
-      </v-card>
+          <div class="num-row">
+            <v-text-field
+              v-model.number="form.test_timeout_secs"
+              type="number"
+              label="单次测试超时（秒）"
+              density="compact"
+            />
+            <v-text-field
+              v-model.number="form.test_concurrency"
+              type="number"
+              label="批量测试并发数（1-8）"
+              density="compact"
+            />
+          </div>
+          <div class="card-actions">
+            <v-btn color="primary" :loading="store.saving" @click="doSave">保存</v-btn>
+          </div>
+        </div>
+      </section>
 
-      <v-card elevation="0" :border="true" class="mt-4">
-        <v-card-title class="text-subtitle-1">外观</v-card-title>
-        <v-card-text>
-          <div class="text-caption text-medium-emphasis mb-1">
-            任务栏菜单不透明度：{{ Math.round(form.menu_opacity * 100) }}%
+      <section class="glass-card settings-card animate-apple-fade-in apple-delay-2">
+        <header class="card-head">
+          <v-icon icon="mdi-palette-outline" size="18" />
+          <div class="card-head-text">
+            <div class="card-title">外观</div>
+            <div class="card-subtitle">调整后立即生效，右键任务栏图标查看效果</div>
+          </div>
+        </header>
+        <div class="card-body">
+          <div class="opacity-row">
+            <span class="opacity-label">任务栏菜单不透明度</span>
+            <span class="opacity-value">{{ Math.round(form.menu_opacity * 100) }}%</span>
           </div>
           <v-slider
             :model-value="form.menu_opacity * 100"
@@ -196,9 +215,89 @@ async function doSubmit2fa() {
               }
             "
           />
-          <div class="text-caption text-disabled mt-1">调整后立即生效，右键任务栏图标查看效果</div>
-        </v-card-text>
-      </v-card>
-    </v-col>
-  </v-row>
+        </div>
+      </section>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+/* 双栏 7:5 网格，窄屏折为单列 */
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.settings-card {
+  padding: 20px 24px 24px;
+}
+.card-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.card-head > .v-icon {
+  margin-top: 2px;
+  color: hsl(var(--muted-foreground));
+}
+.card-head-text {
+  min-width: 0;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: hsl(var(--foreground));
+}
+.card-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.num-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.opacity-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.opacity-label {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+}
+.opacity-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--accent));
+  font-variant-numeric: tabular-nums;
+}
+</style>

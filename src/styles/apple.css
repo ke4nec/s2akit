@@ -1,0 +1,155 @@
+/* ============================================================
+   Apple-Class 设计系统 · 全局基础样式
+   纯白画布 · 深炭灰文字 · Apple 蓝唯一强调色 · 8px 网格 · iOS 缓动
+   ============================================================ */
+
+:root {
+  /* Apple SF 灰度系统（HSL 通道值，用 hsl(var(--x)) 消费） */
+  --background: 0 0% 100%;
+  --foreground: 0 0% 9%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 0 0% 45%;
+  --accent: 211 100% 50%;
+  --accent-foreground: 0 0% 100%;
+  --border: 0 0% 91%;
+  --ring: 211 100% 50%;
+
+  /* 8px 网格空间单位 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* iOS 缓动函数 */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+html {
+  overflow-y: auto;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+    "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+    "Helvetica Neue", Arial, sans-serif;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body,
+.v-application {
+  font-family: inherit;
+}
+.v-application {
+  color: hsl(var(--foreground));
+}
+
+/* ---------- 动画 ---------- */
+@keyframes apple-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes apple-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-apple-fade-in {
+  animation: apple-fade-in 0.6s var(--ease-out) both;
+}
+.animate-apple-scale-in {
+  animation: apple-scale-in 0.4s var(--ease-out) both;
+}
+/* 渐进式显示：卡片按 0.08s 递增延迟入场 */
+.apple-delay-1 {
+  animation-delay: 0.08s;
+}
+.apple-delay-2 {
+  animation-delay: 0.16s;
+}
+.apple-delay-3 {
+  animation-delay: 0.24s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-apple-fade-in,
+  .animate-apple-scale-in {
+    animation: none;
+  }
+}
+
+/* ---------- 玻璃态 ---------- */
+/* 主窗口顶栏：白色 80% + 20px 毛玻璃 + 发丝线描边 */
+.glass-bar {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+/* 内容卡片：纯白 + 发丝边框 + 极浅投影，Apple 偏爱的 12px 圆角 */
+.glass-card {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+}
+
+/* ---------- Vuetify 控件微调 ---------- */
+/* 按钮：无大写、Apple 风圆角（图标按钮保持圆形） */
+.v-btn {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.v-btn:not(.v-btn--icon) {
+  border-radius: 10px;
+}
+/* 输入框统一 10px 圆角 */
+.v-field {
+  border-radius: 10px;
+}
+/* 提示条 / 气泡 */
+.v-snackbar {
+  border-radius: 14px;
+}
+.v-tooltip .v-overlay__content {
+  border-radius: 8px;
+}
+
+/* 键盘焦点环 */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.55);
+  outline-offset: 1px;
+}
+
+/* ---------- 全局滚动条：细条、圆角、悬停加深 ---------- */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}

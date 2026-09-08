@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -10,19 +10,16 @@ const loading = ref(false);
 const groupName = ref("");
 const groups = ref<{ id: number; name: string }[]>([]);
 const currentGroupId = ref<number | null>(null);
-/** 菜单内容视图：账号列表 / 分组选择 / 模型选择 */
-const view = ref<"accounts" | "groups" | "models">("accounts");
+/** 菜单内容视图：账号列表 / 分组选择 / 账号操作 / 模型选择 */
+const view = ref<"accounts" | "groups" | "account" | "models">("accounts");
+const actionAccount = ref<AccountBrief | null>(null);
 const modelAccount = ref<AccountBrief | null>(null);
 const models = ref<ModelBrief[]>([]);
 const loadingModels = ref(false);
-const ctxMenu = ref<{ account: AccountBrief; x: number; y: number } | null>(null);
 const keyUsage = ref<KeyUsageToday | null>(null);
 /** 最近测试结果（后端缓存，主窗口测过的也能显示） */
 const results = ref<Record<string, TestResult>>({});
 const testingIds = ref(new Set<number>());
-
-const CTX_MENU_W = 176;
-const CTX_MENU_H = 108;
 
 /** token 数格式化为多少 M（100M 以上取整、10M 以上 1 位小数、否则 2 位） */
 function fmtM(n: number): string {
@@ -41,14 +38,38 @@ const usageTitle = computed(() => {
 });
 
 function hide() {
-  ctxMenu.value = null;
   view.value = "accounts";
   void getCurrentWindow().hide();
 }
 
-/** 顶部左侧区点击：账号↔分组切换；模型视图点击返回账号列表 */
+// ---------- 窗口高度贴合内容 ----------
+// 测量菜单真实内容高度回报后端（fit_menu）：窗口随之收缩并按锚点重定位，
+// 菜单底角始终贴住右键点击位置。scrollHeight 是不受 max-height 约束的自然高度，
+// 账号多到超出窗口时也能据此撑开窗口
+let lastFitH = 0;
+async function fitToContent(force = false) {
+  const el = document.querySelector<HTMLElement>(".tray-menu-card");
+  if (!el) return;
+  const extra = el.offsetHeight - el.clientHeight; // 边框等盒模型外扩
+  const h = Math.ceil(Math.max(el.scrollHeight, el.clientHeight) + extra);
+  if (!force && Math.abs(h - lastFitH) < 1) return;
+  lastFitH = h;
+  try {
+    await invoke("fit_menu", { height: h });
+  } catch {
+    lastFitH = 0; // 命令失败时下次重新回报
+  }
+}
+function scheduleFit(force = false) {
+  requestAnimationFrame(() => void fitToContent(force));
+}
+
+// 视图/模型列表切换会改变内容高度，联动重贴合
+watch([view, models, loadingModels], () => scheduleFit());
+
+/** 顶部左侧区点击：账号↔分组切换；账号操作/模型视图点击返回账号列表 */
 function onHeaderClick() {
-  if (view.value === "models") view.value = "accounts";
+  if (view.value === "models" || view.value === "account") view.value = "accounts";
   else view.value = view.value === "groups" ? "accounts" : "groups";
 }
 
@@ -70,6 +91,7 @@ async function reload() {
     keyUsage.value = await usageP;
   } finally {
     loading.value = false;
+    scheduleFit();
   }
 }
 
@@ -108,15 +130,14 @@ async function testAll() {
   }
 }
 
-function openCtxMenu(a: AccountBrief, e: MouseEvent) {
-  const x = Math.max(4, Math.min(e.clientX, window.innerWidth - CTX_MENU_W - 4));
-  const y = Math.max(4, Math.min(e.clientY, window.innerHeight - CTX_MENU_H - 4));
-  ctxMenu.value = { account: a, x, y };
+/** 单击账号行：进入该账号的二级操作菜单（不直接启停，启停也在二级菜单里） */
+function openAccountMenu(a: AccountBrief) {
+  actionAccount.value = a;
+  view.value = "account";
 }
 
 async function testAccount(a: AccountBrief, model?: string) {
   view.value = "accounts";
-  ctxMenu.value = null;
   testingIds.value.add(a.id);
   try {
     const r = await invoke<TestResult>("tray_test_account", {
@@ -133,7 +154,6 @@ async function testAccount(a: AccountBrief, model?: string) {
 
 /** 打开某账号的模型选择列表 */
 function openModels(a: AccountBrief) {
-  ctxMenu.value = null;
   modelAccount.value = a;
   models.value = [];
   view.value = "models";
@@ -157,10 +177,11 @@ function ftColor(ms: number): string {
   return "text-error";
 }
 
-async function toggleFromCtx() {
-  if (!ctxMenu.value) return;
-  const a = ctxMenu.value.account;
-  ctxMenu.value = null;
+/** 二级菜单里的启停：回账号列表并刷新，让行首圆点立即反映新状态 */
+async function toggleFromMenu() {
+  if (!actionAccount.value) return;
+  const a = actionAccount.value;
+  view.value = "accounts";
   await toggleAccount(a);
 }
 
@@ -175,27 +196,42 @@ async function quit() {
 
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") {
-    if (ctxMenu.value) ctxMenu.value = null;
-    else if (view.value !== "accounts") view.value = "accounts";
+    if (view.value !== "accounts") view.value = "accounts";
     else hide();
   }
 }
 
 let unlisten: (() => void) | null = null;
+let ro: ResizeObserver | null = null;
 onMounted(async () => {
+  // 在挂载后标记：script setup 顶层会在模块导入时执行，
+  // 而主窗口同样会静态 import 本组件，写在顶层会污染主窗口的 documentElement
+  document.documentElement.classList.add("s2a-tray-doc");
   document.documentElement.style.background = "transparent";
   document.body.style.background = "transparent";
   unlisten = await listen("tray-menu-shown", () => {
     void invoke("menu_pong");
+    // 每次弹出都从根视图开始：Rust 侧隐藏（再右键收起/失焦）不经过前端 hide()，
+    // view 会残留上次的子视图，重开时应回到账号列表（原生菜单行为）
+    view.value = "accounts";
+    // 每次弹出后端都会先按估算高度摆放窗口，需强制按当前内容重新贴合定位
+    scheduleFit(true);
     void reload();
   });
   window.addEventListener("keydown", onKey);
+  // 账号列表到达、视图切换等任何盒高变化都重新贴合
+  // （内容超出窗口时盒高不变，另由 reload/watch 显式触发）
+  ro = new ResizeObserver(() => scheduleFit());
+  const card = document.querySelector(".tray-menu-card");
+  if (card) ro.observe(card);
   // 页面能执行到这里即证明加载成功，告知后端菜单存活
   void invoke("menu_pong");
   void reload();
 });
 onBeforeUnmount(() => {
   unlisten?.();
+  ro?.disconnect();
+  document.documentElement.classList.remove("s2a-tray-doc");
   window.removeEventListener("keydown", onKey);
 });
 </script>
@@ -203,15 +239,22 @@ onBeforeUnmount(() => {
 <template>
   <v-app>
     <v-main class="tray-wrap">
-      <v-card elevation="0" rounded="0" class="tray-menu-card">
+      <!-- 卡片级右键=原生式点消：菜单底边贴住光标，会盖住托盘图标，
+           在图标原地再右键会落到本窗口，用点消保留“再右键收起”的体验。
+           账号行右键走二级菜单（行上 .stop，不冒泡到这里） -->
+      <v-card elevation="0" rounded="0" class="tray-menu-card" @contextmenu.prevent="hide">
         <!-- 顶部一行：左侧分组/模型区可点击切换视图，右侧当前 key 当天用量仅悬停看明细 -->
         <div class="tray-header">
           <button class="header-btn" type="button" @click="onHeaderClick">
             <span class="header-title">{{
-              view === "models" ? (modelAccount?.name ?? "选择模型") : groupName
+              view === "models"
+                ? (modelAccount?.name ?? "选择模型")
+                : view === "account"
+                  ? (actionAccount?.name ?? "账号操作")
+                  : groupName
             }}</span>
             <v-icon
-              :icon="view === 'models' ? 'mdi-chevron-left' : view === 'groups' ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+              :icon="view === 'models' || view === 'account' ? 'mdi-chevron-left' : view === 'groups' ? 'mdi-chevron-up' : 'mdi-chevron-down'"
               size="14"
               color="primary"
             />
@@ -227,7 +270,7 @@ onBeforeUnmount(() => {
           <v-progress-linear v-if="loading || (view === 'models' && loadingModels)" indeterminate color="primary" height="2" />
           <!-- 分组选择 -->
           <v-list v-if="view === 'groups'" density="compact" class="py-0 bg-transparent">
-            <v-list-item v-for="g in groups" :key="g.id" density="compact" @click="pickGroup(g)">
+            <v-list-item v-for="g in groups" :key="g.id" density="compact" @click="pickGroup(g)" @contextmenu.stop.prevent>
               <template #prepend>
                 <v-icon
                   :icon="g.id === currentGroupId ? 'mdi-check' : 'mdi-circle-medium'"
@@ -240,7 +283,7 @@ onBeforeUnmount(() => {
           </v-list>
           <!-- 模型选择：自动 + 该账号的模型列表 -->
           <v-list v-else-if="view === 'models'" density="compact" class="py-0 bg-transparent">
-            <v-list-item density="compact" @click="modelAccount && testAccount(modelAccount)">
+            <v-list-item density="compact" @click="modelAccount && testAccount(modelAccount)" @contextmenu.stop.prevent>
               <template #prepend>
                 <v-icon icon="mdi-flash" size="14" color="primary" />
               </template>
@@ -251,6 +294,7 @@ onBeforeUnmount(() => {
               :key="m.id"
               density="compact"
               @click="modelAccount && testAccount(modelAccount, m.id)"
+              @contextmenu.stop.prevent
             >
               <template #prepend>
                 <v-icon icon="mdi-chat-processing-outline" size="14" color="grey" />
@@ -263,14 +307,40 @@ onBeforeUnmount(() => {
               该账号没有可用的模型列表
             </div>
           </v-list>
+          <!-- 账号操作二级菜单：单击账号行进入 -->
+          <v-list v-else-if="view === 'account' && actionAccount" density="compact" class="py-0 bg-transparent">
+            <v-list-item density="compact" @click="testAccount(actionAccount)" @contextmenu.stop.prevent>
+              <template #prepend>
+                <v-icon icon="mdi-speedometer" size="16" />
+              </template>
+              <v-list-item-title class="text-caption">测试该账号</v-list-item-title>
+            </v-list-item>
+            <v-list-item density="compact" @click="openModels(actionAccount)" @contextmenu.stop.prevent>
+              <template #prepend>
+                <v-icon icon="mdi-file-tree-outline" size="16" />
+              </template>
+              <v-list-item-title class="text-caption">选择模型测试…</v-list-item-title>
+            </v-list-item>
+            <v-list-item density="compact" @click="toggleFromMenu" @contextmenu.stop.prevent>
+              <template #prepend>
+                <v-icon
+                  :icon="actionAccount.schedulable ? 'mdi-circle-outline' : 'mdi-circle'"
+                  size="16"
+                />
+              </template>
+              <v-list-item-title class="text-caption">
+                {{ actionAccount.schedulable ? "禁用该账号" : "启用该账号" }}
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
           <!-- 账号列表 -->
           <v-list v-else density="compact" class="py-0 bg-transparent">
             <v-list-item
               v-for="a in accounts"
               :key="a.id"
               density="compact"
-              @click="toggleAccount(a)"
-              @contextmenu.prevent="openCtxMenu(a, $event)"
+              @click="openAccountMenu(a)"
+              @contextmenu.stop.prevent="openAccountMenu(a)"
             >
               <template #prepend>
                 <v-icon
@@ -359,65 +429,39 @@ onBeforeUnmount(() => {
           </v-list-item>
         </v-list>
 
-        <!-- 账号行右键菜单 -->
-        <template v-if="ctxMenu">
-          <div class="ctx-overlay" @click="ctxMenu = null" @contextmenu.prevent="ctxMenu = null" />
-          <v-list density="compact" class="ctx-menu" elevation="8" rounded="lg" :style="{
-            left: `${ctxMenu.x}px`,
-            top: `${ctxMenu.y}px`,
-          }">
-            <v-list-item density="compact" @click="testAccount(ctxMenu.account)">
-              <template #prepend>
-                <v-icon icon="mdi-speedometer" size="16" />
-              </template>
-              <v-list-item-title class="text-caption">测试该账号</v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" @click="openModels(ctxMenu.account)">
-              <template #prepend>
-                <v-icon icon="mdi-file-tree-outline" size="16" />
-              </template>
-              <v-list-item-title class="text-caption">选择模型测试…</v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" @click="toggleFromCtx">
-              <template #prepend>
-                <v-icon
-                  :icon="ctxMenu.account.schedulable ? 'mdi-circle-outline' : 'mdi-circle'"
-                  size="16"
-                />
-              </template>
-              <v-list-item-title class="text-caption">
-                {{ ctxMenu.account.schedulable ? "禁用该账号" : "启用该账号" }}
-              </v-list-item-title>
-            </v-list-item>
-          </v-list>
-        </template>
       </v-card>
     </v-main>
   </v-app>
 </template>
 
 <style>
-html,
-body,
-#app,
-.v-application {
+/* 透明窗口样式只作用于托盘菜单文档（.s2a-tray-doc 由脚本注入），避免污染主窗口 */
+html.s2a-tray-doc,
+html.s2a-tray-doc body,
+html.s2a-tray-doc #app,
+html.s2a-tray-doc .v-application {
   background: transparent !important;
   overflow: hidden;
 }
-/* 卡片铺满窗口，无外边距；阴影会贴边裁掉，改用描边 */
+/* 卡片铺满窗口，无外边距；阴影会贴边裁掉，改用描边；
+   macOS 弹出菜单质感：12px 圆角 + 发丝边框（窗口透明，圆角外露出桌面） */
 .tray-wrap {
   padding: 0 !important;
 }
 .tray-menu-card {
-  background: rgb(250, 250, 252);
+  background: rgba(250, 250, 252, 0.97);
   /* 窗口高度已由 Rust 按内容估算，卡片贴合窗口即可 */
   max-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
 }
-/* 顶部单行：左侧可点击区与右侧用量区互为兄弟元素，事件互不影响 */
+.tray-menu-card .v-divider {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+/* 顶部单行：左侧可点击区与右侧用量区互为兄弟元素，事件互不影响（28px 固定高） */
 .tray-header {
   flex: none;
   height: 28px;
@@ -431,21 +475,23 @@ body,
 .header-btn {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   flex: 0 1 auto;
   margin: 0;
-  padding: 3px 6px;
+  padding: 3px 7px;
   border: none;
   border-radius: 6px;
   background: transparent;
   font-family: inherit;
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.65);
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.75);
   cursor: pointer;
+  transition: background 0.15s var(--ease-in-out, ease);
 }
 .header-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.05);
 }
 .header-title {
   overflow: hidden;
@@ -461,7 +507,7 @@ body,
   gap: 4px;
   white-space: nowrap;
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.62);
+  color: rgba(0, 0, 0, 0.5);
   font-variant-numeric: tabular-nums;
   user-select: none;
   cursor: default;
@@ -470,35 +516,40 @@ body,
 .tray-actions {
   flex: none;
 }
-/* 紧凑行高：所有菜单行统一 32px、小号图标 */
+/* 紧凑行高：所有菜单行统一 32px、小号图标（Rust 侧按 32px/行估算窗口高度，勿改） */
 .tray-list .v-list-item,
-.tray-actions .v-list-item,
-.ctx-menu .v-list-item {
+.tray-actions .v-list-item {
   --v-list-item-one-line-height: 32px;
   min-height: 32px;
+  border-radius: 7px;
+  margin: 0 2px;
 }
 .tray-list .v-list-item .v-list-item-title,
-.tray-actions .v-list-item .v-list-item-title,
-.ctx-menu .v-list-item .v-list-item-title {
+.tray-actions .v-list-item .v-list-item-title {
   font-size: 12px !important;
+  color: rgba(0, 0, 0, 0.85);
+}
+/* 行悬浮/涟漪高亮随行圆角 */
+.tray-list .v-list-item__overlay,
+.tray-actions .v-list-item__overlay {
+  border-radius: 7px;
+}
+/* 底部操作区图标弱化为次级灰 */
+.tray-actions .v-list-item .v-icon {
+  color: rgba(0, 0, 0, 0.5);
 }
 .tray-list {
+  position: relative;
   overflow-y: auto;
   min-height: 0;
   flex: 1 1 auto;
 }
-/* 右键菜单：遮罩截获点击以关闭，菜单钉在光标处（卡片铺满窗口，fixed 即视口坐标） */
-.ctx-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-}
-.ctx-menu {
-  position: fixed;
-  z-index: 11;
-  min-width: 168px;
-  padding: 4px 0;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+/* 加载条悬浮在列表顶部、不占布局：避免每次刷新让窗口高度抖动 2px */
+.tray-list > .v-progress-linear {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
 }
 </style>

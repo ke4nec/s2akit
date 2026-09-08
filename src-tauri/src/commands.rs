@@ -241,13 +241,21 @@ pub fn get_last_results(
 }
 
 fn notify(app: &AppHandle, body: &str) {
-    use tauri_plugin_notification::NotificationExt;
-    let _ = app
-        .notification()
-        .builder()
-        .title("s2akit")
-        .body(body)
-        .show();
+    // Windows 直发并指定 AUMID,避免插件在开发/便携模式下回退 PowerShell 图标
+    #[cfg(windows)]
+    {
+        crate::win_toast::notify(app, "s2akit", body);
+    }
+    #[cfg(not(windows))]
+    {
+        use tauri_plugin_notification::NotificationExt;
+        let _ = app
+            .notification()
+            .builder()
+            .title("s2akit")
+            .body(body)
+            .show();
+    }
 }
 
 // ---------- 测速 ----------
@@ -613,6 +621,13 @@ pub fn menu_pong(app: AppHandle) {
     app.state::<AppState>()
         .menu_alive
         .store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 托盘菜单前端回报真实内容高度：窗口收缩贴合内容，并按锚点重定位
+/// （菜单底角始终贴住右键点击位置，与原生托盘菜单一致）
+#[tauri::command]
+pub fn fit_menu(app: AppHandle, height: f64) {
+    crate::tray::fit_menu_window(&app, height);
 }
 
 #[tauri::command]

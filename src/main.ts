@@ -1,12 +1,48 @@
 import { createApp } from "vue";
 import "vuetify/styles";
 import "@mdi/font/css/materialdesignicons.css";
+import "./styles/apple.css";
 import { createVuetify } from "vuetify";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App.vue";
 
+// Apple-Class 主题：纯白画布 + 深炭灰文字 + Apple 蓝 (#007AFF) 唯一强调色，
+// 语义色取自 Apple 系统色板（绿/橙/红）
 const vuetify = createVuetify({
-  theme: { defaultTheme: "light" },
+  theme: {
+    defaultTheme: "appleLight",
+    themes: {
+      appleLight: {
+        dark: false,
+        colors: {
+          background: "#FFFFFF",
+          surface: "#FFFFFF",
+          "surface-variant": "#F5F5F7",
+          "on-surface": "#1D1D1F",
+          "on-surface-variant": "#6E6E73",
+          primary: "#007AFF",
+          "on-primary": "#FFFFFF",
+          "primary-darken-1": "#0066D6",
+          "primary-lighten-1": "#4DA2FF",
+          secondary: "#F5F5F7",
+          "on-secondary": "#1D1D1F",
+          success: "#34C759",
+          "on-success": "#FFFFFF",
+          warning: "#FF9500",
+          "on-warning": "#FFFFFF",
+          error: "#FF3B30",
+          "on-error": "#FFFFFF",
+          info: "#007AFF",
+          "on-info": "#FFFFFF",
+          grey: "#8E8E93",
+        },
+      },
+    },
+  },
+  defaults: {
+    VTextField: { variant: "outlined" },
+    VSelect: { variant: "outlined" },
+  },
 });
 
 const app = createApp(App);

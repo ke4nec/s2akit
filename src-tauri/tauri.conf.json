@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "s2akit - sub2api 账号测速切换",
+        "title": "s2akit",
         "visible": false,
         "width": 1000,
         "height": 700,
