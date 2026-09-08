@@ -268,15 +268,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 卡片铺满子菜单窗口；窗口贴边，阴影会被裁掉，只用描边（与主菜单一致） */
+/* 卡片铺满子菜单窗口；与主菜单同一套 Apple 质感（Acrylic + 发丝边框 + 内高光） */
 .tray-wrap {
   padding: 0 !important;
 }
 .submenu-card {
-  background: rgba(252, 252, 254, 0.99);
+  background: rgba(248, 248, 250, 0.78);
   max-height: 100vh;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  /* 8px 与 DWM 窗口圆角一致，与主菜单严丝合缝 */
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
   padding: 2px;
 }
 .submenu-card .v-list-item {

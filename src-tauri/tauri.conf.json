@@ -31,7 +31,12 @@
         "decorations": false,
         "transparent": true,
         "skipTaskbar": true,
-        "alwaysOnTop": true
+        "alwaysOnTop": true,
+        "shadow": false,
+        "windowEffects": {
+          "effects": ["acrylic"],
+          "color": "#F2F2F5"
+        }
       },
       {
         "label": "tray-submenu",
@@ -46,7 +51,12 @@
         "skipTaskbar": true,
         "alwaysOnTop": true,
         "focusable": false,
-        "focus": false
+        "focus": false,
+        "shadow": false,
+        "windowEffects": {
+          "effects": ["acrylic"],
+          "color": "#F2F2F5"
+        }
       }
     ],
     "security": {

@@ -126,6 +126,27 @@ fn place_menu(app: &AppHandle, w: &tauri::WebviewWindow, logical_h: f64) {
     let _ = w.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
 
+/// Windows：DWM 圆角裁剪菜单窗口本身。CSS 圆角只切网页内容，窗口级亚克力会铺满
+/// 整个矩形，四角不裁就会露出方形底（背景去不掉的观感）。此处半径与 CSS
+/// border-radius 取一致，边缘严丝合缝；Win10 不支持该属性会自动忽略（保持方形）。
+#[cfg(windows)]
+pub(crate) fn round_menu_corners(w: &tauri::WebviewWindow) {
+    use windows::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+    };
+    if let Ok(hwnd) = w.hwnd() {
+        let pref = DWMWCP_ROUND.0;
+        unsafe {
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &pref as *const i32 as *const std::ffi::c_void,
+                std::mem::size_of::<i32>() as u32,
+            );
+        }
+    }
+}
+
 /// 显示账号级联子菜单独立窗口：主菜单窗口宽度不变，子菜单另起窗口级联在主菜单旁。
 /// row_top 为账号行相对主菜单卡片上沿的逻辑偏移。注意底层 show()（SW_SHOW）总会短暂
 /// 抢走主菜单焦点（focusable 仅防点击激活），此处立刻把焦点还给主菜单，

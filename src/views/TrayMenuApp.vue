@@ -431,14 +431,18 @@ html.s2a-tray-doc .v-application {
   padding: 0 !important;
 }
 .tray-menu-card {
-  background: rgba(250, 250, 252, 0.97);
+  /* Apple 菜单质感：窗口级 Acrylic 毛玻璃打底，卡片只盖半透明底色；
+     发丝边框 + 顶部内高光，系统阴影已在窗口配置关闭，不再叠边 */
+  background: rgba(246, 246, 248, 0.72);
   /* 窗口高度已由 Rust 按内容估算，卡片贴合窗口即可 */
   max-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  /* 8px 与 DWM 窗口圆角（DWMWCP_ROUND）一致，窗口与卡片边缘严丝合缝 */
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 /* 子菜单指示箭头：常态弱化，行展开/悬浮时加深 */
 .submenu-hint {

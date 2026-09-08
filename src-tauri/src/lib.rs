@@ -50,6 +50,18 @@ pub fn run() {
 
             tray::setup_tray(&handle)?;
 
+            // 菜单窗口 DWM 圆角：CSS 只切网页，窗口本身也要裁，
+            // 否则亚克力铺满矩形、四角露出方形底（Win10 忽略，保持方形）
+            #[cfg(windows)]
+            {
+                if let Some(menu) = app.get_webview_window("tray-menu") {
+                    tray::round_menu_corners(&menu);
+                }
+                if let Some(sub) = app.get_webview_window("tray-submenu") {
+                    tray::round_menu_corners(&sub);
+                }
+            }
+
             // 注册通知 AUMID(开发/便携模式下让 Toast 显示应用图标而非 PowerShell)
             #[cfg(windows)]
             win_toast::ensure_aumid_shortcut(&handle);
