@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   getAccountModels,
   handleErr,
@@ -78,12 +78,17 @@ function firstTokenColor(ms: number): string {
   return "error";
 }
 
-/// 行背景按状态着色：错误 > 限流/临时 > 启用中 > 默认
+/// 行背景按状态着色：错误 > 限流/临时 > 启用中 > 默认；右键行弹出快捷菜单
 function rowProps({ item }: { item: Row }): Record<string, unknown> {
-  if (item.status === "error") return { class: "s2a-row-error" };
-  if (item.rate_limited || item.temp_unschedulable) return { class: "s2a-row-warn" };
-  if (item.schedulable) return { class: "s2a-row-active" };
-  return {};
+  const cls =
+    item.status === "error"
+      ? "s2a-row-error"
+      : item.rate_limited || item.temp_unschedulable
+        ? "s2a-row-warn"
+        : item.schedulable
+          ? "s2a-row-active"
+          : "";
+  return { class: cls, onContextmenu: (e: MouseEvent) => openCtxMenu(e, item) };
 }
 
 function firstTokenClass(r: TestResult): string {
@@ -147,6 +152,65 @@ function testWithModel(model: ModelBrief) {
   modelDialog.value = false;
   void testAccount(modelAccount.value.id, model.id);
 }
+
+// ---- 行右键快捷菜单：测试 / 选择模型测试 / 启用禁用 ----
+const ctxMenu = ref(false);
+const ctxRow = ref<Row | null>(null);
+const ctxX = ref(0);
+const ctxY = ref(0);
+const ctxRef = ref<HTMLElement | null>(null);
+
+function openCtxMenu(e: MouseEvent, row: Row) {
+  e.preventDefault();
+  e.stopPropagation();
+  ctxRow.value = row;
+  ctxMenu.value = false;
+  // 先按光标定位，下 tick 按菜单实测尺寸钳入视口
+  ctxX.value = e.clientX;
+  ctxY.value = e.clientY;
+  void nextTick(() => {
+    ctxMenu.value = true;
+    void nextTick(placeCtxMenu);
+  });
+}
+
+/** 按菜单实测尺寸把右键菜单钳入视口，避免贴边时溢出 */
+function placeCtxMenu() {
+  const el = ctxRef.value;
+  if (!el) return;
+  ctxX.value = Math.max(8, Math.min(ctxX.value, window.innerWidth - el.offsetWidth - 8));
+  ctxY.value = Math.max(8, Math.min(ctxY.value, window.innerHeight - el.offsetHeight - 8));
+}
+
+function closeCtxMenu() {
+  ctxMenu.value = false;
+  ctxRow.value = null;
+}
+
+function ctxTest() {
+  const row = ctxRow.value;
+  closeCtxMenu();
+  if (row && !row.testing) void testAccount(row.id);
+}
+
+function ctxOpenModels() {
+  const row = ctxRow.value;
+  closeCtxMenu();
+  if (row && !row.testing) void openModelDialog(row);
+}
+
+function ctxToggle() {
+  const row = ctxRow.value;
+  closeCtxMenu();
+  if (row && !row.testing) void setSchedulable(row.id, !row.schedulable);
+}
+
+function onCtxKey(e: KeyboardEvent) {
+  if (e.key === "Escape" && ctxMenu.value) closeCtxMenu();
+}
+
+onMounted(() => window.addEventListener("keydown", onCtxKey));
+onBeforeUnmount(() => window.removeEventListener("keydown", onCtxKey));
 </script>
 
 <template>
@@ -390,6 +454,37 @@ function testWithModel(model: ModelBrief) {
         </div>
       </v-card>
     </v-dialog>
+
+    <!-- 行右键快捷菜单：跟随光标，点消（与托盘菜单一致，右键空白处收起） -->
+    <div
+      v-if="ctxMenu && ctxRow"
+      class="ctx-overlay"
+      @click="closeCtxMenu"
+      @contextmenu.prevent="closeCtxMenu"
+    >
+      <div
+        ref="ctxRef"
+        class="ctx-menu"
+        :style="{ left: `${ctxX}px`, top: `${ctxY}px` }"
+        @click.stop
+        @contextmenu.stop.prevent
+      >
+        <div class="ctx-title" :title="ctxRow.name">{{ ctxRow.name }}</div>
+        <button type="button" class="ctx-item" :disabled="ctxRow.testing" @click="ctxTest">
+          <v-icon icon="mdi-speedometer" size="16" />
+          <span>测试该账号</span>
+        </button>
+        <button type="button" class="ctx-item" :disabled="ctxRow.testing" @click="ctxOpenModels">
+          <v-icon icon="mdi-file-tree-outline" size="16" />
+          <span>选择模型测试…</span>
+        </button>
+        <div class="ctx-sep" />
+        <button type="button" class="ctx-item" :disabled="ctxRow.testing" @click="ctxToggle">
+          <v-icon :icon="ctxRow.schedulable ? 'mdi-circle-outline' : 'mdi-circle'" size="16" />
+          <span>{{ ctxRow.schedulable ? "禁用该账号" : "启用该账号" }}</span>
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -521,5 +616,61 @@ function testWithModel(model: ModelBrief) {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+
+/* 行右键快捷菜单：透明全屏点消层 + 跟随光标的浮层卡片 */
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: transparent;
+}
+.ctx-menu {
+  position: fixed;
+  width: 184px;
+  padding: 4px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  box-shadow:
+    0 8px 28px rgb(0 0 0 / 0.14),
+    0 0 0 0.5px rgb(0 0 0 / 0.02);
+}
+.ctx-title {
+  padding: 6px 10px 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+}
+.ctx-item:hover:not(:disabled) {
+  background: hsl(var(--muted));
+}
+.ctx-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: hsl(var(--border));
 }
 </style>
