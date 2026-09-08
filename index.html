@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>s2akit</title>
+    <style>
+      /* 内联启动样式：Vuetify CSS 加载前先渲染占位，避免白屏 */
+      html,
+      body {
+        margin: 0;
+        background: #ffffff;
+      }
+      #app.boot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: system-ui, "Microsoft YaHei", sans-serif;
+        color: #666;
+        font-size: 13px;
+        gap: 8px;
+      }
+      #app.boot .ring {
+        width: 18px;
+        height: 18px;
+        border: 2px solid #ddd;
+        border-top-color: #1976d2;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app" class="boot"><div class="ring"></div>正在启动 s2akit…</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
