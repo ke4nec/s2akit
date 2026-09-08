@@ -5,9 +5,12 @@ import { acceptCompliance, init, store } from "./store";
 import AccountsView from "./views/AccountsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import TrayMenuApp from "./views/TrayMenuApp.vue";
+import TraySubmenuApp from "./views/TraySubmenuApp.vue";
 
-// 托盘菜单是独立小窗口，加载同一个 SPA 的 #tray-menu 入口
-const isTrayMenu = window.location.hash.includes("tray-menu");
+// 托盘菜单是独立小窗口，加载同一个 SPA 的 #tray-menu 入口；
+// 账号级联子菜单是另一个独立小窗口（#tray-submenu），主菜单宽度不变
+const isTraySubmenu = window.location.hash.includes("tray-submenu");
+const isTrayMenu = !isTraySubmenu && window.location.hash.includes("tray-menu");
 
 const tabs = [
   { value: "accounts", label: "账号", icon: "mdi-format-list-bulleted" },
@@ -20,7 +23,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <TrayMenuApp v-if="isTrayMenu" />
+  <TraySubmenuApp v-if="isTraySubmenu" />
+  <TrayMenuApp v-else-if="isTrayMenu" />
   <v-app v-else>
     <v-app-bar flat density="compact" class="glass-bar">
       <!-- macOS 分段控件风格导航 -->

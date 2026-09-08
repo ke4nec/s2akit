@@ -32,6 +32,21 @@
         "transparent": true,
         "skipTaskbar": true,
         "alwaysOnTop": true
+      },
+      {
+        "label": "tray-submenu",
+        "url": "index.html#tray-submenu",
+        "title": "",
+        "visible": false,
+        "width": 176,
+        "height": 120,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "focusable": false,
+        "focus": false
       }
     ],
     "security": {

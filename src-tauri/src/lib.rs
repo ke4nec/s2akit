@@ -45,6 +45,7 @@ pub fn run() {
                 testing: AtomicBool::new(false),
                 menu_alive: AtomicBool::new(true),
                 menu_anchor: std::sync::Mutex::new(None),
+                submenu_row_top: std::sync::Mutex::new(None),
             });
 
             tray::setup_tray(&handle)?;
@@ -65,6 +66,8 @@ pub fn run() {
             }
 
             // 托盘菜单窗口：失焦即隐藏（模拟原生菜单行为）。
+            // 失焦后延迟 150ms 二次确认：子菜单窗口弹出瞬间（SW_SHOW）会短暂抢走焦点，
+            // show_submenu 会立刻归还，二次确认时已恢复聚焦则不收；真正的点消仍会收起。
             // 记录“获得过焦点”状态：显示瞬间可能先收到一次 Focused(false)，需忽略
             if let Some(menu) = app.get_webview_window("tray-menu") {
                 let m = menu.clone();
@@ -79,7 +82,19 @@ pub fn run() {
                     }
                     tauri::WindowEvent::Focused(false) => {
                         if hf.swap(false, std::sync::atomic::Ordering::Relaxed) {
-                            let _ = m.hide();
+                            let app_c = app_h.clone();
+                            let m_c = m.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(std::time::Duration::from_millis(150));
+                                let focused = app_c
+                                    .get_webview_window("tray-menu")
+                                    .and_then(|w| w.is_focused().ok())
+                                    .unwrap_or(false);
+                                if !focused {
+                                    let _ = m_c.hide();
+                                    crate::tray::hide_submenu_window(&app_c);
+                                }
+                            });
                         }
                     }
                     tauri::WindowEvent::CloseRequested { .. } => {
@@ -118,6 +133,9 @@ pub fn run() {
             commands::set_menu_opacity,
             commands::menu_pong,
             commands::fit_menu,
+            commands::show_submenu,
+            commands::hide_submenu,
+            commands::fit_submenu,
             commands::open_main_window,
             commands::quit_app,
         ])

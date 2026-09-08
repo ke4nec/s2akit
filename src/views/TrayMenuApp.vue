@@ -3,19 +3,18 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { AccountBrief, KeyUsageToday, ModelBrief, TestResult } from "../types";
+import type { AccountBrief, KeyUsageToday, TestResult } from "../types";
 
 const accounts = ref<AccountBrief[]>([]);
 const loading = ref(false);
 const groupName = ref("");
 const groups = ref<{ id: number; name: string }[]>([]);
 const currentGroupId = ref<number | null>(null);
-/** 菜单内容视图：账号列表 / 分组选择 / 账号操作 / 模型选择 */
-const view = ref<"accounts" | "groups" | "account" | "models">("accounts");
-const actionAccount = ref<AccountBrief | null>(null);
-const modelAccount = ref<AccountBrief | null>(null);
-const models = ref<ModelBrief[]>([]);
-const loadingModels = ref(false);
+/** 菜单内容视图：账号列表 / 分组选择（账号操作在独立子菜单窗口级联展开） */
+const view = ref<"accounts" | "groups">("accounts");
+/** 子菜单窗口是否展开（行高亮用）；子菜单内容由独立窗口渲染 */
+const expandedId = ref<number | null>(null);
+let closeTimer: number | null = null;
 const keyUsage = ref<KeyUsageToday | null>(null);
 /** 最近测试结果（后端缓存，主窗口测过的也能显示） */
 const results = ref<Record<string, TestResult>>({});
@@ -39,6 +38,7 @@ const usageTitle = computed(() => {
 
 function hide() {
   view.value = "accounts";
+  closeSubmenu();
   void getCurrentWindow().hide();
 }
 
@@ -64,16 +64,18 @@ function scheduleFit(force = false) {
   requestAnimationFrame(() => void fitToContent(force));
 }
 
-// 视图/模型列表切换会改变内容高度，联动重贴合
-watch([view, models, loadingModels], () => scheduleFit());
+// 视图切换会改变内容高度，联动重贴合
+// （子菜单是独立窗口，不占本窗口布局，展开收起不重贴合，窗口不抖）
+watch([view], () => scheduleFit());
 
-/** 顶部左侧区点击：账号↔分组切换；账号操作/模型视图点击返回账号列表 */
+/** 顶部左侧区点击：账号↔分组切换；切换时收起子菜单窗口 */
 function onHeaderClick() {
-  if (view.value === "models" || view.value === "account") view.value = "accounts";
-  else view.value = view.value === "groups" ? "accounts" : "groups";
+  closeSubmenu();
+  view.value = view.value === "groups" ? "accounts" : "groups";
 }
 
 async function reload() {
+  closeSubmenu();
   loading.value = true;
   // 用量查询与账号列表并行，不阻塞主内容加载
   const usageP = invoke<KeyUsageToday | null>("get_key_usage_today").catch(() => null);
@@ -107,18 +109,6 @@ async function pickGroup(g: { id: number; name: string }) {
   await reload();
 }
 
-async function toggleAccount(a: AccountBrief) {
-  try {
-    await invoke("set_schedulable", {
-      accountId: a.id,
-      schedulable: !a.schedulable,
-    });
-    await reload();
-  } catch {
-    hide();
-  }
-}
-
 async function testAll() {
   hide();
   const ch = new Channel<unknown>();
@@ -130,44 +120,65 @@ async function testAll() {
   }
 }
 
-/** 单击账号行：进入该账号的二级操作菜单（不直接启停，启停也在二级菜单里） */
-function openAccountMenu(a: AccountBrief) {
-  actionAccount.value = a;
-  view.value = "account";
-}
-
-async function testAccount(a: AccountBrief, model?: string) {
-  view.value = "accounts";
-  testingIds.value.add(a.id);
-  try {
-    const r = await invoke<TestResult>("tray_test_account", {
-      accountId: a.id,
-      model: model ?? null,
-    });
-    results.value = { ...results.value, [String(a.id)]: r };
-  } catch {
-    // 失败会走系统通知
-  } finally {
-    testingIds.value.delete(a.id);
+function cancelClose() {
+  if (closeTimer !== null) {
+    window.clearTimeout(closeTimer);
+    closeTimer = null;
   }
 }
 
-/** 打开某账号的模型选择列表 */
-function openModels(a: AccountBrief) {
-  modelAccount.value = a;
-  models.value = [];
-  view.value = "models";
-  loadingModels.value = true;
-  invoke<ModelBrief[]>("get_account_models", { accountId: a.id })
-    .then((m) => {
-      models.value = m;
-    })
-    .catch(() => {
-      view.value = "accounts";
-    })
-    .finally(() => {
-      loadingModels.value = false;
-    });
+/** 立即收起子菜单窗口 */
+function closeSubmenu() {
+  cancelClose();
+  expandedId.value = null;
+  invoke("hide_submenu").catch(() => {});
+}
+
+/** 延迟收起：给“从账号行斜滑入子菜单窗口”留出跨越窗口间隙的时间 */
+function scheduleClose(delay = 180) {
+  cancelClose();
+  closeTimer = window.setTimeout(() => {
+    closeTimer = null;
+    closeSubmenu();
+  }, delay);
+}
+
+/** 账号行相对主菜单卡片上沿的逻辑偏移（CSS px），后端据此纵向定位子菜单窗口 */
+function rowTopOf(anchor: HTMLElement): number {
+  const card = document.querySelector<HTMLElement>(".tray-menu-card");
+  if (!card) return 96;
+  return anchor.getBoundingClientRect().top - card.getBoundingClientRect().top;
+}
+
+/** 悬停账号行：在主菜单旁另起独立窗口级联二级菜单（主菜单宽度不变） */
+function onRowEnter(a: AccountBrief, e: Event) {
+  cancelClose();
+  if (expandedId.value === a.id) return;
+  expandedId.value = a.id;
+  const anchor = e.currentTarget as HTMLElement | null;
+  const rowTop = anchor ? rowTopOf(anchor) : 96;
+  // 子菜单窗口不可聚焦、不抢焦点；菜单内容由子菜单窗口按 accountId 自取
+  invoke("show_submenu", { accountId: a.id, rowTop, height: 120 }).catch(() => {
+    expandedId.value = null;
+  });
+}
+
+function onRowLeave() {
+  scheduleClose();
+}
+
+/** 点击账号行：同样展开/收起（触控板点不准、悬停困难时可用） */
+function toggleSubmenu(a: AccountBrief, e: Event) {
+  if (expandedId.value === a.id) {
+    closeSubmenu();
+    return;
+  }
+  onRowEnter(a, e);
+}
+
+/** 列表滚动时行列错位，直接收起避免子菜单窗口悬空 */
+function onListScroll() {
+  if (expandedId.value !== null) closeSubmenu();
 }
 
 /** 首 token 时长着色：与主窗口阈值一致 */
@@ -175,14 +186,6 @@ function ftColor(ms: number): string {
   if (ms < 2000) return "text-success";
   if (ms < 5000) return "text-warning";
   return "text-error";
-}
-
-/** 二级菜单里的启停：回账号列表并刷新，让行首圆点立即反映新状态 */
-async function toggleFromMenu() {
-  if (!actionAccount.value) return;
-  const a = actionAccount.value;
-  view.value = "accounts";
-  await toggleAccount(a);
 }
 
 async function openMain() {
@@ -196,12 +199,13 @@ async function quit() {
 
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") {
-    if (view.value !== "accounts") view.value = "accounts";
+    if (expandedId.value !== null) closeSubmenu();
+    else if (view.value !== "accounts") view.value = "accounts";
     else hide();
   }
 }
 
-let unlisten: (() => void) | null = null;
+const unlistens: (() => void)[] = [];
 let ro: ResizeObserver | null = null;
 onMounted(async () => {
   // 在挂载后标记：script setup 顶层会在模块导入时执行，
@@ -209,15 +213,46 @@ onMounted(async () => {
   document.documentElement.classList.add("s2a-tray-doc");
   document.documentElement.style.background = "transparent";
   document.body.style.background = "transparent";
-  unlisten = await listen("tray-menu-shown", () => {
-    void invoke("menu_pong");
-    // 每次弹出都从根视图开始：Rust 侧隐藏（再右键收起/失焦）不经过前端 hide()，
-    // view 会残留上次的子视图，重开时应回到账号列表（原生菜单行为）
-    view.value = "accounts";
-    // 每次弹出后端都会先按估算高度摆放窗口，需强制按当前内容重新贴合定位
-    scheduleFit(true);
-    void reload();
-  });
+  unlistens.push(
+    await listen("tray-menu-shown", () => {
+      void invoke("menu_pong");
+      // 每次弹出都从根视图开始：Rust 侧隐藏（再右键收起/失焦）不经过前端 hide()，
+      // view/子菜单会残留上次状态，重开时应回到账号列表（原生菜单行为）
+      view.value = "accounts";
+      closeSubmenu();
+      // 每次弹出后端都会先按估算高度摆放窗口，需强制按当前内容重新贴合定位
+      scheduleFit(true);
+      void reload();
+    })
+  );
+  // 子菜单窗口悬停状态：滑入取消收起，滑出延迟收起（跨窗口不断连）
+  unlistens.push(
+    await listen<{ inside: boolean }>("submenu-hover", (e) => {
+      if (e.payload.inside) cancelClose();
+      else scheduleClose();
+    })
+  );
+  // 子菜单窗口发起的测速：行内转圈与结果回填
+  unlistens.push(
+    await listen<{ accountId: number }>("submenu-test-start", (e) => {
+      testingIds.value.add(e.payload.accountId);
+    })
+  );
+  unlistens.push(
+    await listen<{ accountId: number; result: TestResult | null }>("submenu-tested", (e) => {
+      testingIds.value.delete(e.payload.accountId);
+      if (e.payload.result) {
+        results.value = { ...results.value, [String(e.payload.accountId)]: e.payload.result };
+      }
+    })
+  );
+  // 别处（子菜单/主窗口）启停账号后刷新列表，行首圆点即时更新
+  unlistens.push(
+    await listen<AccountBrief[]>("accounts-updated", (e) => {
+      accounts.value = e.payload;
+      scheduleFit();
+    })
+  );
   window.addEventListener("keydown", onKey);
   // 账号列表到达、视图切换等任何盒高变化都重新贴合
   // （内容超出窗口时盒高不变，另由 reload/watch 显式触发）
@@ -229,7 +264,8 @@ onMounted(async () => {
   void reload();
 });
 onBeforeUnmount(() => {
-  unlisten?.();
+  cancelClose();
+  unlistens.forEach((u) => u());
   ro?.disconnect();
   document.documentElement.classList.remove("s2a-tray-doc");
   window.removeEventListener("keydown", onKey);
@@ -243,18 +279,12 @@ onBeforeUnmount(() => {
            在图标原地再右键会落到本窗口，用点消保留“再右键收起”的体验。
            账号行右键走二级菜单（行上 .stop，不冒泡到这里） -->
       <v-card elevation="0" rounded="0" class="tray-menu-card" @contextmenu.prevent="hide">
-        <!-- 顶部一行：左侧分组/模型区可点击切换视图，右侧当前 key 当天用量仅悬停看明细 -->
+        <!-- 顶部一行：左侧分组区可点击切换视图，右侧当前 key 当天用量仅悬停看明细 -->
         <div class="tray-header">
           <button class="header-btn" type="button" @click="onHeaderClick">
-            <span class="header-title">{{
-              view === "models"
-                ? (modelAccount?.name ?? "选择模型")
-                : view === "account"
-                  ? (actionAccount?.name ?? "账号操作")
-                  : groupName
-            }}</span>
+            <span class="header-title">{{ groupName }}</span>
             <v-icon
-              :icon="view === 'models' || view === 'account' ? 'mdi-chevron-left' : view === 'groups' ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+              :icon="view === 'groups' ? 'mdi-chevron-up' : 'mdi-chevron-down'"
               size="14"
               color="primary"
             />
@@ -266,8 +296,8 @@ onBeforeUnmount(() => {
         </div>
         <v-divider />
 
-        <div class="tray-list">
-          <v-progress-linear v-if="loading || (view === 'models' && loadingModels)" indeterminate color="primary" height="2" />
+        <div class="tray-list" @scroll="onListScroll">
+          <v-progress-linear v-if="loading" indeterminate color="primary" height="2" />
           <!-- 分组选择 -->
           <v-list v-if="view === 'groups'" density="compact" class="py-0 bg-transparent">
             <v-list-item v-for="g in groups" :key="g.id" density="compact" @click="pickGroup(g)" @contextmenu.stop.prevent>
@@ -281,66 +311,17 @@ onBeforeUnmount(() => {
               <v-list-item-title class="text-caption">{{ g.name }}</v-list-item-title>
             </v-list-item>
           </v-list>
-          <!-- 模型选择：自动 + 该账号的模型列表 -->
-          <v-list v-else-if="view === 'models'" density="compact" class="py-0 bg-transparent">
-            <v-list-item density="compact" @click="modelAccount && testAccount(modelAccount)" @contextmenu.stop.prevent>
-              <template #prepend>
-                <v-icon icon="mdi-flash" size="14" color="primary" />
-              </template>
-              <v-list-item-title class="text-caption">自动选择模型</v-list-item-title>
-            </v-list-item>
-            <v-list-item
-              v-for="m in models"
-              :key="m.id"
-              density="compact"
-              @click="modelAccount && testAccount(modelAccount, m.id)"
-              @contextmenu.stop.prevent
-            >
-              <template #prepend>
-                <v-icon icon="mdi-chat-processing-outline" size="14" color="grey" />
-              </template>
-              <v-list-item-title class="text-caption">
-                {{ m.display_name || m.id }}
-              </v-list-item-title>
-            </v-list-item>
-            <div v-if="!loadingModels && !models.length" class="text-caption text-disabled pa-3">
-              该账号没有可用的模型列表
-            </div>
-          </v-list>
-          <!-- 账号操作二级菜单：单击账号行进入 -->
-          <v-list v-else-if="view === 'account' && actionAccount" density="compact" class="py-0 bg-transparent">
-            <v-list-item density="compact" @click="testAccount(actionAccount)" @contextmenu.stop.prevent>
-              <template #prepend>
-                <v-icon icon="mdi-speedometer" size="16" />
-              </template>
-              <v-list-item-title class="text-caption">测试该账号</v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" @click="openModels(actionAccount)" @contextmenu.stop.prevent>
-              <template #prepend>
-                <v-icon icon="mdi-file-tree-outline" size="16" />
-              </template>
-              <v-list-item-title class="text-caption">选择模型测试…</v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" @click="toggleFromMenu" @contextmenu.stop.prevent>
-              <template #prepend>
-                <v-icon
-                  :icon="actionAccount.schedulable ? 'mdi-circle-outline' : 'mdi-circle'"
-                  size="16"
-                />
-              </template>
-              <v-list-item-title class="text-caption">
-                {{ actionAccount.schedulable ? "禁用该账号" : "启用该账号" }}
-              </v-list-item-title>
-            </v-list-item>
-          </v-list>
-          <!-- 账号列表 -->
+          <!-- 账号列表：悬停或点击账户行，在主菜单旁另起窗口级联二级菜单（主列表保持可见） -->
           <v-list v-else density="compact" class="py-0 bg-transparent">
             <v-list-item
               v-for="a in accounts"
               :key="a.id"
               density="compact"
-              @click="openAccountMenu(a)"
-              @contextmenu.stop.prevent="openAccountMenu(a)"
+              :active="expandedId === a.id"
+              @mouseenter="onRowEnter(a, $event)"
+              @mouseleave="onRowLeave()"
+              @click="toggleSubmenu(a, $event)"
+              @contextmenu.stop.prevent="toggleSubmenu(a, $event)"
             >
               <template #prepend>
                 <v-icon
@@ -396,6 +377,7 @@ onBeforeUnmount(() => {
                 >
                   限流
                 </v-chip>
+                <v-icon icon="mdi-chevron-right" size="14" class="submenu-hint ml-1" />
               </template>
             </v-list-item>
           </v-list>
@@ -457,6 +439,14 @@ html.s2a-tray-doc .v-application {
   overflow: hidden;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 12px;
+}
+/* 子菜单指示箭头：常态弱化，行展开/悬浮时加深 */
+.submenu-hint {
+  color: rgba(0, 0, 0, 0.3);
+}
+.v-list-item:hover .submenu-hint,
+.v-list-item--active .submenu-hint {
+  color: rgba(0, 0, 0, 0.55);
 }
 .tray-menu-card .v-divider {
   border-color: rgba(0, 0, 0, 0.08) !important;

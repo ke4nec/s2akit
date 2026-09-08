@@ -630,6 +630,24 @@ pub fn fit_menu(app: AppHandle, height: f64) {
     crate::tray::fit_menu_window(&app, height);
 }
 
+/// 显示账号级联子菜单独立窗口：主菜单窗口宽度不变，子菜单另起窗口级联在主菜单旁
+#[tauri::command]
+pub fn show_submenu(app: AppHandle, account_id: i64, row_top: f64, height: f64) {
+    crate::tray::show_submenu_window(&app, account_id, row_top, height);
+}
+
+/// 隐藏账号级联子菜单窗口
+#[tauri::command]
+pub fn hide_submenu(app: AppHandle) {
+    crate::tray::hide_submenu_window(&app);
+}
+
+/// 级联子菜单前端回报真实内容高度：重设子菜单窗口尺寸并按行锚点重定位
+#[tauri::command]
+pub fn fit_submenu(app: AppHandle, height: f64) {
+    crate::tray::fit_submenu_window(&app, height);
+}
+
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
     app.exit(0);
