@@ -45,8 +45,39 @@ async function hide() {
   }
 }
 
+/** 模型名截断提示（Vuetify tooltip 做浮层）：仅文本被省略号截断才出现，
+ * 悬停 300ms 开显（macOS 提示式节奏），上下空间不够时自动翻面 */
+const TOOLTIP_DELAY = 300;
+const tipId = ref<string | null>(null);
+const tipText = ref("");
+const tipLocation = ref<"top" | "bottom">("bottom");
+let tipTimer: number | null = null;
+
+function closeTip() {
+  if (tipTimer !== null) {
+    window.clearTimeout(tipTimer);
+    tipTimer = null;
+  }
+  tipId.value = null;
+}
+
+function onModelNameEnter(m: ModelBrief, e: Event) {
+  closeTip();
+  if (testing.value || pendingId.value !== null) return;
+  const el = e.currentTarget as HTMLElement | null;
+  if (!el || el.scrollWidth <= el.clientWidth + 1) return;
+  tipTimer = window.setTimeout(() => {
+    tipTimer = null;
+    const r = el.getBoundingClientRect();
+    tipText.value = m.display_name || m.id;
+    tipLocation.value = r.bottom + 10 + 30 <= window.innerHeight ? "bottom" : "top";
+    tipId.value = m.id;
+  }, TOOLTIP_DELAY);
+}
+
 /** 主菜单通过后端事件下发账号 id，子菜单自取最新快照（含启停状态） */
 async function loadAccount(id: number) {
+  closeTip();
   pendingId.value = id;
   modelsOpen.value = false;
   models.value = [];
@@ -97,6 +128,7 @@ async function ensureModels() {
 function toggleModels() {
   if (!account.value || testing.value || pendingId.value !== null) return;
   if (modelsOpen.value) {
+    closeTip();
     modelsOpen.value = false;
     models.value = [];
     loadingModels.value = false;
@@ -225,7 +257,7 @@ onBeforeUnmount(() => {
             </template>
           </v-list-item>
           <!-- 三级：模型列表（悬停即加载，内滚，不撑窗口） -->
-          <div v-if="modelsOpen" class="submenu-models">
+          <div v-if="modelsOpen" class="submenu-models" @scroll="closeTip">
             <v-progress-linear v-if="loadingModels" indeterminate color="primary" height="2" />
             <v-list-item
               v-else
@@ -246,12 +278,28 @@ onBeforeUnmount(() => {
                 @click="onTest(m.id)"
                 @contextmenu.stop.prevent="onTest(m.id)"
               >
-                <template #prepend>
-                  <v-icon icon="mdi-chat-processing-outline" size="14" color="grey" />
-                </template>
-                <v-list-item-title class="text-caption submenu-model-name">
-                  {{ m.display_name || m.id }}
-                </v-list-item-title>
+                <v-tooltip
+                  :model-value="tipId === m.id"
+                  :open-on-hover="false"
+                  :open-on-click="false"
+                  :open-on-focus="false"
+                  :location="tipLocation"
+                  :offset="6"
+                  content-class="apple-tip"
+                  transition="fade-transition"
+                >
+                  <template #activator="{ props }">
+                    <v-list-item-title
+                      v-bind="props"
+                      class="text-caption submenu-model-name"
+                      @mouseenter="onModelNameEnter(m, $event)"
+                      @mouseleave="closeTip"
+                    >
+                      {{ m.display_name || m.id }}
+                    </v-list-item-title>
+                  </template>
+                  {{ tipText }}
+                </v-tooltip>
               </v-list-item>
               <div v-if="!models.length" class="text-caption text-disabled px-3 py-2">
                 该账号没有可用的模型列表
@@ -286,6 +334,7 @@ onBeforeUnmount(() => {
   padding: 0 !important;
 }
 .submenu-card {
+  position: relative;
   background: rgba(248, 248, 250, 0.78);
   max-height: 100vh;
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -293,6 +342,14 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
   padding: 2px;
+}
+/* 加载条悬浮顶部不占布局，避免窗口高度抖动 */
+.submenu-card > .v-progress-linear {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
 }
 .submenu-card .v-list-item {
   --v-list-item-one-line-height: 32px;
@@ -327,5 +384,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 模型名截断提示：Vuetify tooltip 做浮层，此处只覆盖苹果风深色皮肤 */
+.v-overlay__content.apple-tip {
+  background: rgba(28, 28, 30, 0.94);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 4px 9px;
+  border-radius: 7px;
+  max-width: 280px;
+  word-break: break-all;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 </style>
