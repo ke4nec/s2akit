@@ -636,6 +636,12 @@ pub fn show_submenu(app: AppHandle, account_id: i64, row_top: f64, height: f64) 
     crate::tray::show_submenu_window(&app, account_id, row_top, height);
 }
 
+/// 显示分组级联子菜单独立窗口（与账号子菜单共用窗口，主菜单宽度不变）
+#[tauri::command]
+pub fn show_groups_submenu(app: AppHandle, row_top: f64, height: f64) {
+    crate::tray::show_groups_submenu_window(&app, row_top, height);
+}
+
 /// 隐藏账号级联子菜单窗口
 #[tauri::command]
 pub fn hide_submenu(app: AppHandle) {

@@ -5,10 +5,14 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import type { AccountBrief, ModelBrief, TestResult } from "../types";
 
 /**
- * 账号级联子菜单独立窗口：主菜单悬停/点击账户行时另起窗口弹出，
- * 主菜单窗口宽度不变。窗口不可聚焦（不抢焦点），失焦收起走主菜单。
+ * 级联子菜单独立窗口：账号操作 / 分组选择两种内容，共用窗口弹出，
+ * 主菜单窗口宽度不变、高度不切视图。窗口不可聚焦（不抢焦点），失焦收起走主菜单。
  */
+const mode = ref<"account" | "groups">("account");
 const account = ref<AccountBrief | null>(null);
+const groups = ref<{ id: number; name: string }[]>([]);
+const currentGroupId = ref<number | null>(null);
+const loadingGroups = ref(false);
 /** 正在切行加载中：保留旧内容防闪白，但禁用操作防误触旧账号 */
 const pendingId = ref<number | null>(null);
 const modelsOpen = ref(false);
@@ -75,9 +79,37 @@ function onModelNameEnter(m: ModelBrief, e: Event) {
   }, TOOLTIP_DELAY);
 }
 
+/** 分组选择模式：自取分组列表与当前选中 */
+async function loadGroups() {
+  closeTip();
+  mode.value = "groups";
+  loadingGroups.value = true;
+  try {
+    groups.value = await invoke<{ id: number; name: string }[]>("list_groups");
+    const cfg = await invoke<{ group_id: number | null }>("get_config");
+    currentGroupId.value = cfg.group_id;
+  } catch {
+    groups.value = [];
+  } finally {
+    loadingGroups.value = false;
+    await nextTick();
+    scheduleFit();
+  }
+}
+
+async function onPickGroup(id: number) {
+  await hide();
+  try {
+    await emitTo("tray-menu", "submenu-pick-group", { groupId: id });
+  } catch {
+    // 忽略
+  }
+}
+
 /** 主菜单通过后端事件下发账号 id，子菜单自取最新快照（含启停状态） */
 async function loadAccount(id: number) {
   closeTip();
+  mode.value = "account";
   pendingId.value = id;
   modelsOpen.value = false;
   models.value = [];
@@ -209,6 +241,11 @@ onMounted(async () => {
       void loadAccount(e.payload);
     })
   );
+  unlistens.push(
+    await listen("submenu-open-groups", () => {
+      void loadGroups();
+    })
+  );
 });
 onBeforeUnmount(() => {
   unlistens.forEach((u) => u());
@@ -220,7 +257,7 @@ onBeforeUnmount(() => {
   <v-app>
     <v-main class="tray-wrap">
       <v-card
-        v-if="account"
+        v-if="mode === 'account' && account"
         elevation="0"
         rounded="0"
         class="submenu-card"
@@ -322,6 +359,38 @@ onBeforeUnmount(() => {
               {{ account.schedulable ? "禁用该账号" : "启用该账号" }}
             </v-list-item-title>
           </v-list-item>
+        </v-list>
+      </v-card>
+      <v-card
+        v-if="mode === 'groups'"
+        elevation="0"
+        rounded="0"
+        class="submenu-card"
+        @mouseenter="onEnter"
+        @mouseleave="onLeave"
+        @contextmenu.stop.prevent
+      >
+        <v-progress-linear v-if="loadingGroups" indeterminate color="primary" height="2" />
+        <v-list density="compact" class="py-1 bg-transparent">
+          <v-list-item
+            v-for="g in groups"
+            :key="g.id"
+            density="compact"
+            @click="onPickGroup(g.id)"
+            @contextmenu.stop.prevent="onPickGroup(g.id)"
+          >
+            <template #prepend>
+              <v-icon
+                :icon="g.id === currentGroupId ? 'mdi-check' : 'mdi-circle-medium'"
+                :color="g.id === currentGroupId ? 'primary' : 'grey'"
+                size="14"
+              />
+            </template>
+            <v-list-item-title class="text-caption">{{ g.name }}</v-list-item-title>
+          </v-list-item>
+          <div v-if="!loadingGroups && !groups.length" class="text-caption text-disabled px-3 py-2">
+            暂无分组
+          </div>
         </v-list>
       </v-card>
     </v-main>

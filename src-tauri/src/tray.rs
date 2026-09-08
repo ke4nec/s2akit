@@ -7,7 +7,7 @@ pub const TRAY_ID: &str = "s2akit-tray";
 /// 宽度取固定值：hidden 窗口的 scale 可能失准，用 outer_size 反推宽度会逐次漂移
 const MENU_WIDTH_LOGICAL: f64 = 240.0;
 /// 级联子菜单窗口逻辑宽度（CSS px，与 tauri.conf 中 tray-submenu 的 width 保持一致）
-const SUBMENU_WIDTH_LOGICAL: f64 = 176.0;
+const SUBMENU_WIDTH_LOGICAL: f64 = 188.0;
 /// 主菜单窗口与级联子菜单窗口之间的逻辑间隙（CSS px）
 const CASCADE_GAP_LOGICAL: f64 = 4.0;
 
@@ -166,6 +166,24 @@ pub fn show_submenu_window(app: &AppHandle, account_id: i64, row_top: f64, heigh
         let _ = main.set_focus();
     }
     let _ = app.emit_to("tray-submenu", "submenu-open", account_id);
+}
+
+/// 显示分组级联子菜单独立窗口：与账号子菜单共用 tray-submenu 窗口，
+/// 内容由 submenu-open-groups 事件通知子菜单窗口渲染分组列表
+pub fn show_groups_submenu_window(app: &AppHandle, row_top: f64, height: f64) {
+    *app
+        .state::<crate::state::AppState>()
+        .submenu_row_top
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(row_top);
+    place_submenu_window(app, height);
+    if let Some(w) = app.get_webview_window("tray-submenu") {
+        let _ = w.show();
+    }
+    if let Some(main) = app.get_webview_window("tray-menu") {
+        let _ = main.set_focus();
+    }
+    let _ = app.emit_to("tray-submenu", "submenu-open-groups", ());
 }
 
 /// 子菜单内容高度变化后重设尺寸并按行锚点重定位（仅子菜单可见时生效）

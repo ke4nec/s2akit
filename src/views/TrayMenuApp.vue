@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -10,10 +10,10 @@ const loading = ref(false);
 const groupName = ref("");
 const groups = ref<{ id: number; name: string }[]>([]);
 const currentGroupId = ref<number | null>(null);
-/** 菜单内容视图：账号列表 / 分组选择（账号操作在独立子菜单窗口级联展开） */
-const view = ref<"accounts" | "groups">("accounts");
-/** 子菜单窗口是否展开（行高亮用）；子菜单内容由独立窗口渲染 */
+/** 子菜单窗口展开的账号（行高亮用）；分组级联展开时为 null，用 groupsOpen 指示。
+ * 分组选择也在独立子菜单窗口里，主菜单不再切视图、高度不抖 */
 const expandedId = ref<number | null>(null);
+const groupsOpen = ref(false);
 let closeTimer: number | null = null;
 const keyUsage = ref<KeyUsageToday | null>(null);
 /** 最近测试结果（后端缓存，主窗口测过的也能显示） */
@@ -37,21 +37,29 @@ const usageTitle = computed(() => {
 });
 
 function hide() {
-  view.value = "accounts";
   closeSubmenu();
   void getCurrentWindow().hide();
 }
 
 // ---------- 窗口高度贴合内容 ----------
 // 测量菜单真实内容高度回报后端（fit_menu）：窗口随之收缩并按锚点重定位，
-// 菜单底角始终贴住右键点击位置。scrollHeight 是不受 max-height 约束的自然高度，
-// 账号多到超出窗口时也能据此撑开窗口
+// 菜单底角始终贴住右键点击位置。注意不能直接取卡片 scrollHeight：
+// 账号区域是内部滚动的 flex 子项（overflow-y:auto + min-height:0），
+// 窗口一旦收窄（如内容曾变矮），卡片 scrollHeight 就被钳住不再反映自然高度，
+// 菜单只会缩小、再也长不回去。正确做法：非滚动铬（顶栏/分隔线/底部操作）
+// 取 offsetHeight，账号列表取自身 scrollHeight（滚动容器该值恒为内容全高）。
 let lastFitH = 0;
 async function fitToContent(force = false) {
-  const el = document.querySelector<HTMLElement>(".tray-menu-card");
-  if (!el) return;
-  const extra = el.offsetHeight - el.clientHeight; // 边框等盒模型外扩
-  const h = Math.ceil(Math.max(el.scrollHeight, el.clientHeight) + extra);
+  const card = document.querySelector<HTMLElement>(".tray-menu-card");
+  const list = card?.querySelector<HTMLElement>(".tray-list");
+  if (!card || !list) return;
+  let h = 0;
+  for (const child of Array.from(card.children)) {
+    const el = child as HTMLElement;
+    h += el.classList.contains("tray-list") ? el.scrollHeight : el.offsetHeight;
+  }
+  h += card.offsetHeight - card.clientHeight; // 边框等盒模型外扩
+  h = Math.ceil(h);
   if (!force && Math.abs(h - lastFitH) < 1) return;
   lastFitH = h;
   try {
@@ -64,14 +72,43 @@ function scheduleFit(force = false) {
   requestAnimationFrame(() => void fitToContent(force));
 }
 
-// 视图切换会改变内容高度，联动重贴合
-// （子菜单是独立窗口，不占本窗口布局，展开收起不重贴合，窗口不抖）
-watch([view], () => scheduleFit());
+/** 顶部左侧区：在主菜单旁另起独立窗口级联分组列表（主菜单定高不切视图） */
+function openGroupsSubmenu(rowTop: number) {
+  cancelClose();
+  expandedId.value = null;
+  groupsOpen.value = true;
+  // 与账号子菜单共用独立窗口，内容由子菜单窗口自行渲染
+  invoke("show_groups_submenu", { rowTop, height: 120 }).catch(() => {
+    groupsOpen.value = false;
+  });
+}
 
-/** 顶部左侧区点击：账号↔分组切换；切换时收起子菜单窗口 */
-function onHeaderClick() {
-  closeSubmenu();
-  view.value = view.value === "groups" ? "accounts" : "groups";
+function onHeaderEnter(e: Event) {
+  cancelClose();
+  if (groupsOpen.value) {
+    cancelOpen();
+    return;
+  }
+  // 与账号行同样的悬停意图，避免鼠标路过顶栏时误弹
+  const anchor = e.currentTarget as HTMLElement | null;
+  const rowTop = anchor ? rowTopOf(anchor) : 32;
+  scheduleOpen(() => openGroupsSubmenu(rowTop));
+}
+
+function onHeaderLeave() {
+  cancelOpen();
+  scheduleClose();
+}
+
+function onHeaderClick(e: Event) {
+  cancelOpen();
+  if (groupsOpen.value) {
+    closeSubmenu();
+    return;
+  }
+  cancelClose();
+  const anchor = e.currentTarget as HTMLElement | null;
+  openGroupsSubmenu(anchor ? rowTopOf(anchor) : 32);
 }
 
 /** 重新加载菜单数据；refreshUsage=true 绕过后端缓存强制刷新顶部额度 */
@@ -101,7 +138,6 @@ async function reload(refreshUsage = false) {
 }
 
 async function pickGroup(g: { id: number; name: string }) {
-  view.value = "accounts";
   if (g.id === currentGroupId.value) return;
   try {
     await invoke("select_group", { groupId: g.id });
@@ -136,16 +172,32 @@ function cancelClose() {
  *  防抖主要靠收起侧的跨窗口桥接而非拉长展开延迟 */
 const HOVER_OPEN_DELAY = 100;
 let openTimer: number | null = null;
+let pendingFire: (() => void) | null = null;
 
 function cancelOpen() {
   if (openTimer !== null) {
     window.clearTimeout(openTimer);
     openTimer = null;
   }
+  pendingFire = null;
+}
+
+/** 悬停意图：停留 HOVER_OPEN_DELAY 才执行，快速扫过不弹，避免窗口反复横跳 */
+function scheduleOpen(fire: () => void) {
+  cancelOpen();
+  pendingFire = fire;
+  openTimer = window.setTimeout(() => {
+    openTimer = null;
+    const f = pendingFire;
+    pendingFire = null;
+    f?.();
+  }, HOVER_OPEN_DELAY);
 }
 
 /** 立即展开子菜单窗口（点击走即时路径，不经过悬停延迟） */
 function openSubmenu(id: number, rowTop: number) {
+  // 从分组子菜单直接划到账号行时收起分组态：顶栏高亮/点击语义随之复位
+  groupsOpen.value = false;
   expandedId.value = id;
   // 子菜单窗口不可聚焦、不抢焦点；菜单内容由子菜单窗口按 accountId 自取
   invoke("show_submenu", { accountId: id, rowTop, height: 120 }).catch(() => {
@@ -153,11 +205,12 @@ function openSubmenu(id: number, rowTop: number) {
   });
 }
 
-/** 立即收起子菜单窗口 */
+/** 立即收起子菜单窗口（账号操作 / 分组选择共用） */
 function closeSubmenu() {
   cancelClose();
   cancelOpen();
   expandedId.value = null;
+  groupsOpen.value = false;
   invoke("hide_submenu").catch(() => {});
 }
 
@@ -184,14 +237,9 @@ function onRowEnter(a: AccountBrief, e: Event) {
     cancelOpen();
     return;
   }
-  // 悬停意图：停留 HOVER_OPEN_DELAY 才展开，快速扫过不弹，避免窗口反复横跳
-  cancelOpen();
   const anchor = e.currentTarget as HTMLElement | null;
   const rowTop = anchor ? rowTopOf(anchor) : 96;
-  openTimer = window.setTimeout(() => {
-    openTimer = null;
-    openSubmenu(a.id, rowTop);
-  }, HOVER_OPEN_DELAY);
+  scheduleOpen(() => openSubmenu(a.id, rowTop));
 }
 
 function onRowLeave() {
@@ -234,8 +282,7 @@ async function quit() {
 
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") {
-    if (expandedId.value !== null) closeSubmenu();
-    else if (view.value !== "accounts") view.value = "accounts";
+    if (expandedId.value !== null || groupsOpen.value) closeSubmenu();
     else hide();
   }
 }
@@ -251,9 +298,8 @@ onMounted(async () => {
   unlistens.push(
     await listen("tray-menu-shown", () => {
       void invoke("menu_pong");
-      // 每次弹出都从根视图开始：Rust 侧隐藏（再右键收起/失焦）不经过前端 hide()，
-      // view/子菜单会残留上次状态，重开时应回到账号列表（原生菜单行为）
-      view.value = "accounts";
+      // 每次弹出都回到账号列表：Rust 侧隐藏（再右键收起/失焦）不经过前端 hide()，
+      // 子菜单展开态会残留，重开时收起（原生菜单行为）
       closeSubmenu();
       // 每次弹出后端都会先按估算高度摆放窗口，需强制按当前内容重新贴合定位
       scheduleFit(true);
@@ -279,6 +325,14 @@ onMounted(async () => {
       if (e.payload.result) {
         results.value = { ...results.value, [String(e.payload.accountId)]: e.payload.result };
       }
+    })
+  );
+  // 子菜单窗口点选分组：收起并切换（高度跟新数据走，浏览分组时不动）
+  unlistens.push(
+    await listen<{ groupId: number }>("submenu-pick-group", (e) => {
+      const g = groups.value.find((x) => x.id === e.payload.groupId);
+      closeSubmenu();
+      if (g) void pickGroup(g);
     })
   );
   // 别处（子菜单/主窗口）启停账号后刷新列表，行首圆点即时更新
@@ -315,15 +369,18 @@ onBeforeUnmount(() => {
            在图标原地再右键会落到本窗口，用点消保留“再右键收起”的体验。
            账号行右键走二级菜单（行上 .stop，不冒泡到这里） -->
       <v-card elevation="0" rounded="0" class="tray-menu-card" @contextmenu.prevent="hide">
-        <!-- 顶部一行：左侧分组区可点击切换视图，右侧当前 key 当天用量仅悬停看明细 -->
+        <!-- 顶部一行：左侧分组区悬停/点击级联分组列表，右侧当前 key 当天用量仅悬停看明细 -->
         <div class="tray-header">
-          <button class="header-btn" type="button" @click="onHeaderClick">
+          <button
+            class="header-btn"
+            :class="{ 'header-btn--active': groupsOpen }"
+            type="button"
+            @mouseenter="onHeaderEnter($event)"
+            @mouseleave="onHeaderLeave()"
+            @click="onHeaderClick($event)"
+          >
             <span class="header-title">{{ groupName }}</span>
-            <v-icon
-              :icon="view === 'groups' ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-              size="14"
-              color="primary"
-            />
+            <v-icon icon="mdi-chevron-down" size="14" color="primary" />
           </button>
           <span v-if="keyUsage" class="usage-stats" :title="usageTitle">
             <v-icon icon="mdi-chart-areaspline" size="12" color="primary" />
@@ -334,21 +391,8 @@ onBeforeUnmount(() => {
 
         <div class="tray-list" @scroll="onListScroll">
           <v-progress-linear v-if="loading" indeterminate color="primary" height="2" />
-          <!-- 分组选择 -->
-          <v-list v-if="view === 'groups'" density="compact" class="py-0 bg-transparent">
-            <v-list-item v-for="g in groups" :key="g.id" density="compact" @click="pickGroup(g)" @contextmenu.stop.prevent>
-              <template #prepend>
-                <v-icon
-                  :icon="g.id === currentGroupId ? 'mdi-check' : 'mdi-circle-medium'"
-                  :color="g.id === currentGroupId ? 'primary' : 'grey'"
-                  size="14"
-                />
-              </template>
-              <v-list-item-title class="text-caption">{{ g.name }}</v-list-item-title>
-            </v-list-item>
-          </v-list>
           <!-- 账号列表：悬停或点击账户行，在主菜单旁另起窗口级联二级菜单（主列表保持可见） -->
-          <v-list v-else density="compact" class="py-0 bg-transparent">
+          <v-list density="compact" class="py-0 bg-transparent">
             <v-list-item
               v-for="a in accounts"
               :key="a.id"
@@ -511,7 +555,8 @@ html.s2a-tray-doc .v-application {
   cursor: pointer;
   transition: background 0.15s var(--ease-in-out, ease);
 }
-.header-btn:hover {
+.header-btn:hover,
+.header-btn--active {
   background: rgba(0, 0, 0, 0.05);
 }
 .header-title {

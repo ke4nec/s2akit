@@ -147,6 +147,7 @@ pub fn run() {
             commands::menu_pong,
             commands::fit_menu,
             commands::show_submenu,
+            commands::show_groups_submenu,
             commands::hide_submenu,
             commands::fit_submenu,
             commands::open_main_window,
