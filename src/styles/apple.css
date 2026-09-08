@@ -91,6 +91,22 @@ body,
   }
 }
 
+/* ---------- 悬停提示统一皮肤 ---------- */
+/* 托盘菜单体系（主菜单 / 级联子菜单）的悬停提示：深色苹果风气泡，
+   content-class="apple-tip" 挂载生效；pre-line 让 \n 换行 */
+.v-overlay__content.apple-tip {
+  background: rgba(28, 28, 30, 0.94);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 4px 9px;
+  border-radius: 7px;
+  max-width: 280px;
+  white-space: pre-line;
+  word-break: break-word;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
 /* ---------- 玻璃态 ---------- */
 /* 主窗口顶栏：白色 80% + 20px 毛玻璃 + 发丝线描边 */
 .glass-bar {
@@ -135,19 +151,33 @@ body,
 }
 
 /* ---------- 语义徽标 ---------- */
-/* 降级/限流徽标：苹果 HIG 无障碍橙 #C55300（标准橙 #FF9500 在小字上对比度不足，
-   苹果规范表为文本专门提供该加深版）+ 浅橙底；错误仍用主题红，正常用主题绿 */
+/* 降级/限流小徽标：design/accounts.html 的 tag-sm 规格——4px 圆角、19px 高、
+   12px/500 字号；苹果 HIG 无障碍橙 #C55300（标准橙 #FF9500 在小字上对比度不足）
+   + 系统橙 14% 透明 tint 底 */
 .s2a-flag {
   display: inline-flex;
   align-items: center;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: rgba(255, 149, 0, 0.16);
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255, 149, 0, 0.14);
   color: #c55300;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.6;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
   white-space: nowrap;
+}
+
+/* 小字状态文本色：HIG 加深版保证小字对比度（design/accounts.html，
+   绿 #248A3D / 橙 #C55300，红不变）；图标、圆点等图形元素仍用主题标准系统色 */
+.s2a-text-success {
+  color: #248a3d;
+}
+.s2a-text-warning {
+  color: #c55300;
+}
+.s2a-text-danger {
+  color: #ff3b30;
 }
 
 /* ---------- 全局滚动条：细条、圆角、悬停加深 ---------- */

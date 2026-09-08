@@ -264,11 +264,11 @@ function onListScroll() {
   if (expandedId.value !== null) closeSubmenu();
 }
 
-/** 首 token 时长着色：与主窗口阈值一致 */
+/** 首 token 时长着色：阈值与主窗口一致；小字用 HIG 加深版文本色（design/accounts.html） */
 function ftColor(ms: number): string {
-  if (ms < 2000) return "text-success";
-  if (ms < 5000) return "text-warning";
-  return "text-error";
+  if (ms < 2000) return "s2a-text-success";
+  if (ms < 5000) return "s2a-text-warning";
+  return "s2a-text-danger";
 }
 
 async function openMain() {
@@ -382,10 +382,20 @@ onBeforeUnmount(() => {
             <span class="header-title">{{ groupName }}</span>
             <v-icon icon="mdi-chevron-down" size="14" color="primary" />
           </button>
-          <span v-if="keyUsage" class="usage-stats" :title="usageTitle">
-            <v-icon icon="mdi-chart-areaspline" size="12" color="primary" />
-            今日 {{ fmtCost(keyUsage.cost) }} · {{ fmtM(keyUsage.total_tokens) }}
-          </span>
+          <v-tooltip
+            v-if="keyUsage"
+            :text="usageTitle"
+            content-class="apple-tip"
+            location="top"
+            :open-delay="300"
+          >
+            <template #activator="{ props }">
+              <span v-bind="props" class="usage-stats">
+                <v-icon icon="mdi-chart-areaspline" size="12" color="primary" />
+                今日 {{ fmtCost(keyUsage.cost) }} · {{ fmtM(keyUsage.total_tokens) }}
+              </span>
+            </template>
+          </v-tooltip>
         </div>
         <v-divider />
 
@@ -406,7 +416,7 @@ onBeforeUnmount(() => {
               <template #prepend>
                 <v-icon
                   :icon="a.schedulable ? 'mdi-circle' : 'mdi-circle-outline'"
-                  :color="a.schedulable ? 'success' : 'grey'"
+                  :color="a.schedulable ? 'success' : '#C7C7CC'"
                   size="9"
                 />
               </template>
@@ -425,27 +435,46 @@ onBeforeUnmount(() => {
                 <v-progress-circular
                   v-if="testingIds.has(a.id)"
                   indeterminate
+                  color="primary"
                   size="12"
                   width="2"
                   class="ml-1"
                 />
                 <template v-else-if="results[String(a.id)]">
-                  <span
+                  <v-tooltip
                     v-if="results[String(a.id)]!.success && results[String(a.id)]!.first_token_ms != null"
-                    :class="ftColor(results[String(a.id)]!.first_token_ms!)"
-                    class="text-caption font-weight-medium ml-1"
-                    :title="`模型：${results[String(a.id)]!.model || '默认'} · 总耗时 ${results[String(a.id)]!.total_ms ?? '—'} ms`"
+                    :text="`模型：${results[String(a.id)]!.model || '默认'} · 总耗时 ${results[String(a.id)]!.total_ms ?? '—'} ms`"
+                    content-class="apple-tip"
+                    location="top"
+                    :open-delay="300"
                   >
-                    {{ results[String(a.id)]!.first_token_ms }}ms
-                  </span>
-                  <v-icon
+                    <template #activator="{ props }">
+                      <span
+                        v-bind="props"
+                        :class="ftColor(results[String(a.id)]!.first_token_ms!)"
+                        class="text-caption font-weight-medium ml-1"
+                      >
+                        {{ results[String(a.id)]!.first_token_ms }}ms
+                      </span>
+                    </template>
+                  </v-tooltip>
+                  <v-tooltip
                     v-else-if="!results[String(a.id)]!.success"
-                    icon="mdi-close-circle"
-                    size="12"
-                    color="error"
-                    class="ml-1"
-                    :title="results[String(a.id)]!.error ?? '测试失败'"
-                  />
+                    :text="results[String(a.id)]!.error ?? '测试失败'"
+                    content-class="apple-tip"
+                    location="top"
+                    :open-delay="300"
+                  >
+                    <template #activator="{ props }">
+                      <v-icon
+                        v-bind="props"
+                        icon="mdi-close-circle"
+                        size="12"
+                        color="error"
+                        class="ml-1"
+                      />
+                    </template>
+                  </v-tooltip>
                 </template>
                 <span v-if="a.rate_limited" class="s2a-flag ml-1">限流</span>
                 <v-icon icon="mdi-chevron-right" size="14" class="submenu-hint ml-1" />

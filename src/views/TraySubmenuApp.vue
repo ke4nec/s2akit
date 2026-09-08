@@ -398,19 +398,18 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 卡片铺满子菜单窗口；与主菜单同一套 Apple 质感（Acrylic + 发丝边框 + 内高光） */
+/* 卡片铺满子菜单窗口；与主菜单同一套规格（Acrylic 底、发丝边框、内高光） */
 .tray-wrap {
   padding: 0 !important;
 }
 .submenu-card {
   position: relative;
-  background: rgba(248, 248, 250, 0.78);
+  background: rgba(246, 246, 248, 0.72);
   max-height: 100vh;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   /* 8px 与 DWM 窗口圆角一致，与主菜单严丝合缝 */
   border-radius: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  padding: 2px;
 }
 /* 加载条悬浮顶部不占布局，避免窗口高度抖动 */
 .submenu-card > .v-progress-linear {
@@ -423,15 +422,15 @@ onBeforeUnmount(() => {
 .submenu-card .v-list-item {
   --v-list-item-one-line-height: 32px;
   min-height: 32px;
-  border-radius: 6px;
-  margin: 0 1px;
+  border-radius: 7px;
+  margin: 0 2px;
 }
 .submenu-card .v-list-item .v-list-item-title {
   font-size: 12px !important;
   color: rgba(0, 0, 0, 0.85);
 }
 .submenu-card .v-list-item__overlay {
-  border-radius: 6px;
+  border-radius: 7px;
 }
 /* 子菜单指示箭头：常态弱化，悬浮时加深 */
 .submenu-hint {
@@ -445,25 +444,13 @@ onBeforeUnmount(() => {
 .submenu-models {
   max-height: 192px;
   overflow-y: auto;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  margin: 2px 1px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin: 2px;
 }
 .submenu-model-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* 模型名截断提示：Vuetify tooltip 做浮层，此处只覆盖苹果风深色皮肤 */
-.v-overlay__content.apple-tip {
-  background: rgba(28, 28, 30, 0.94);
-  color: #fff;
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 4px 9px;
-  border-radius: 7px;
-  max-width: 280px;
-  word-break: break-all;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 </style>
