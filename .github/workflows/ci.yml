@@ -66,18 +66,18 @@ jobs:
           printf 'dummy nsis' > 'src-tauri/target/release/bundle/nsis/s2akit_0.1.0_x64-setup.exe'
           printf 'dummy msi' > 'src-tauri/target/release/bundle/msi/s2akit_0.1.0_x64_en-US.msi'
 
-      # portable 版：Tauri 已把前端资源嵌进 exe，裸 exe 解压即可运行
-      - name: Package portable zip
+      # portable 版：Tauri 已把前端资源嵌进 exe，裸 exe 带 .exe 后缀直接发布，下载即可运行
+      - name: Stage portable exe
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           $exe = Get-Item 'src-tauri/target/release/s2akit.exe'
-          $zip = "s2akit_${version}_windows-x64_portable.zip"
-          Compress-Archive -Path $exe.FullName -DestinationPath $zip -Force
-          Add-Content -Path $env:GITHUB_ENV -Value "PORTABLE_ZIP=$zip"
+          $portable = "s2akit_${version}_windows-x64_portable.exe"
+          Copy-Item $exe.FullName $portable -Force
+          Add-Content -Path $env:GITHUB_ENV -Value "PORTABLE_EXE=$portable"
           Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version"
-          Write-Host "packaged $zip"
+          Write-Host "staged $portable"
 
       # 滚动 prerelease：每次 push 更新同一个 ci-latest，上传前清空旧资产，存储不累积
       - name: Upload to rolling release
@@ -108,7 +108,7 @@ jobs:
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
           }
-          gh release upload $tag "$($nsis.FullName)" "$($msi.FullName)" "$env:PORTABLE_ZIP" --clobber
+          gh release upload $tag "$($nsis.FullName)" "$($msi.FullName)" "$env:PORTABLE_EXE" --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Preview release commands (act)
@@ -118,4 +118,4 @@ jobs:
           echo "[act] would update rolling release 'ci-latest' and upload 3 assets:"
           echo "[act]   - NSIS setup exe (loose)"
           echo "[act]   - MSI installer (loose)"
-          echo "[act]   - portable zip: ${PORTABLE_ZIP:-<unset>}"
+          echo "[act]   - portable exe: ${PORTABLE_EXE:-<unset>}"
