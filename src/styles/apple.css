@@ -1,6 +1,6 @@
 /* ============================================================
    Apple-Class 设计系统 · 全局基础样式
-   纯白画布 · 深炭灰文字 · Apple 蓝唯一强调色 · 8px 网格 · iOS 缓动
+   灰白画布 (#F2F3F5) · 白卡片 · 深炭灰文字 · Apple 蓝唯一强调色 · 8px 网格 · iOS 缓动
    ============================================================ */
 
 :root {
@@ -35,7 +35,7 @@ html {
     "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
     "Helvetica Neue", Arial, sans-serif;
   color: hsl(var(--foreground));
-  background: hsl(var(--background));
+  background: #f2f3f5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

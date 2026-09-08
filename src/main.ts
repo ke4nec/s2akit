@@ -6,7 +6,7 @@ import { createVuetify } from "vuetify";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App.vue";
 
-// Apple-Class 主题：纯白画布 + 深炭灰文字 + Apple 蓝 (#007AFF) 唯一强调色，
+// Apple-Class 主题：灰白画布 (#F2F3F5) + 白卡片 + 深炭灰文字 + Apple 蓝 (#007AFF) 唯一强调色，
 // 语义色取自 Apple 系统色板（绿/橙/红）
 const vuetify = createVuetify({
   theme: {
@@ -15,7 +15,7 @@ const vuetify = createVuetify({
       appleLight: {
         dark: false,
         colors: {
-          background: "#FFFFFF",
+          background: "#F2F3F5",
           surface: "#FFFFFF",
           "surface-variant": "#F5F5F7",
           "on-surface": "#1D1D1F",
