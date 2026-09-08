@@ -342,8 +342,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onCtxKey));
           <v-chip size="x-small" :color="item.schedulable ? 'primary' : 'default'" variant="tonal">
             {{ item.schedulable ? "启用" : "禁用" }}
           </v-chip>
-          <v-chip v-if="item.rate_limited" size="x-small" color="warning" variant="tonal" class="ml-1">限流</v-chip>
-          <v-chip v-if="item.temp_unschedulable" size="x-small" color="warning" variant="tonal" class="ml-1">临时</v-chip>
+          <span v-if="item.rate_limited" class="s2a-flag ml-1">限流</span>
+          <span v-if="item.temp_unschedulable" class="s2a-flag ml-1">临时</span>
         </template>
 
         <template #item.first_token="{ item }">

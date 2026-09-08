@@ -134,6 +134,22 @@ body,
   outline-offset: 1px;
 }
 
+/* ---------- 语义徽标 ---------- */
+/* 降级/限流徽标：苹果 HIG 无障碍橙 #C55300（标准橙 #FF9500 在小字上对比度不足，
+   苹果规范表为文本专门提供该加深版）+ 浅橙底；错误仍用主题红，正常用主题绿 */
+.s2a-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 149, 0, 0.16);
+  color: #c55300;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
 /* ---------- 全局滚动条：细条、圆角、悬停加深 ---------- */
 *::-webkit-scrollbar {
   width: 8px;

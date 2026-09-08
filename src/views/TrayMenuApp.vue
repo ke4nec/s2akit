@@ -127,9 +127,33 @@ function cancelClose() {
   }
 }
 
+/** 悬停意图延迟：鼠标扫过账号列表时不立即弹子菜单，停留片刻才展开，避免闪烁。
+ *  取 100ms：Windows MenuShowDelay 默认 400ms 公认拖沓，调优共识 100ms
+ *  “跟手又不跳”（0 则扫过即弹太神经质）；macOS 原生子菜单更是悬停近乎即开，
+ *  防抖主要靠收起侧的跨窗口桥接而非拉长展开延迟 */
+const HOVER_OPEN_DELAY = 100;
+let openTimer: number | null = null;
+
+function cancelOpen() {
+  if (openTimer !== null) {
+    window.clearTimeout(openTimer);
+    openTimer = null;
+  }
+}
+
+/** 立即展开子菜单窗口（点击走即时路径，不经过悬停延迟） */
+function openSubmenu(id: number, rowTop: number) {
+  expandedId.value = id;
+  // 子菜单窗口不可聚焦、不抢焦点；菜单内容由子菜单窗口按 accountId 自取
+  invoke("show_submenu", { accountId: id, rowTop, height: 120 }).catch(() => {
+    expandedId.value = null;
+  });
+}
+
 /** 立即收起子菜单窗口 */
 function closeSubmenu() {
   cancelClose();
+  cancelOpen();
   expandedId.value = null;
   invoke("hide_submenu").catch(() => {});
 }
@@ -153,27 +177,35 @@ function rowTopOf(anchor: HTMLElement): number {
 /** 悬停账号行：在主菜单旁另起独立窗口级联二级菜单（主菜单宽度不变） */
 function onRowEnter(a: AccountBrief, e: Event) {
   cancelClose();
-  if (expandedId.value === a.id) return;
-  expandedId.value = a.id;
+  if (expandedId.value === a.id) {
+    cancelOpen();
+    return;
+  }
+  // 悬停意图：停留 HOVER_OPEN_DELAY 才展开，快速扫过不弹，避免窗口反复横跳
+  cancelOpen();
   const anchor = e.currentTarget as HTMLElement | null;
   const rowTop = anchor ? rowTopOf(anchor) : 96;
-  // 子菜单窗口不可聚焦、不抢焦点；菜单内容由子菜单窗口按 accountId 自取
-  invoke("show_submenu", { accountId: a.id, rowTop, height: 120 }).catch(() => {
-    expandedId.value = null;
-  });
+  openTimer = window.setTimeout(() => {
+    openTimer = null;
+    openSubmenu(a.id, rowTop);
+  }, HOVER_OPEN_DELAY);
 }
 
 function onRowLeave() {
+  cancelOpen();
   scheduleClose();
 }
 
-/** 点击账号行：同样展开/收起（触控板点不准、悬停困难时可用） */
+/** 点击账号行：同样展开/收起（触控板点不准、悬停困难时可用），点击即时展开 */
 function toggleSubmenu(a: AccountBrief, e: Event) {
+  cancelOpen();
   if (expandedId.value === a.id) {
     closeSubmenu();
     return;
   }
-  onRowEnter(a, e);
+  cancelClose();
+  const anchor = e.currentTarget as HTMLElement | null;
+  openSubmenu(a.id, anchor ? rowTopOf(anchor) : 96);
 }
 
 /** 列表滚动时行列错位，直接收起避免子菜单窗口悬空 */
@@ -265,6 +297,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   cancelClose();
+  cancelOpen();
   unlistens.forEach((u) => u());
   ro?.disconnect();
   document.documentElement.classList.remove("s2a-tray-doc");
@@ -336,7 +369,7 @@ onBeforeUnmount(() => {
                   v-if="a.status === 'error'"
                   icon="mdi-alert"
                   size="10"
-                  color="warning"
+                  color="error"
                   class="ml-1"
                   style="vertical-align: baseline"
                 />
@@ -367,16 +400,7 @@ onBeforeUnmount(() => {
                     :title="results[String(a.id)]!.error ?? '测试失败'"
                   />
                 </template>
-                <v-chip
-                  v-if="a.rate_limited"
-                  size="x-small"
-                  label
-                  color="warning"
-                  variant="tonal"
-                  class="ml-1"
-                >
-                  限流
-                </v-chip>
+                <span v-if="a.rate_limited" class="s2a-flag ml-1">限流</span>
                 <v-icon icon="mdi-chevron-right" size="14" class="submenu-hint ml-1" />
               </template>
             </v-list-item>

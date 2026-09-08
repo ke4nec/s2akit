@@ -9,6 +9,8 @@ import type { AccountBrief, ModelBrief, TestResult } from "../types";
  * 主菜单窗口宽度不变。窗口不可聚焦（不抢焦点），失焦收起走主菜单。
  */
 const account = ref<AccountBrief | null>(null);
+/** 正在切行加载中：保留旧内容防闪白，但禁用操作防误触旧账号 */
+const pendingId = ref<number | null>(null);
 const modelsOpen = ref(false);
 const models = ref<ModelBrief[]>([]);
 const loadingModels = ref(false);
@@ -45,20 +47,31 @@ async function hide() {
 
 /** 主菜单通过后端事件下发账号 id，子菜单自取最新快照（含启停状态） */
 async function loadAccount(id: number) {
-  account.value = null;
+  pendingId.value = id;
   modelsOpen.value = false;
   models.value = [];
   loadingModels.value = false;
   testing.value = false;
   try {
     const list = await invoke<AccountBrief[]>("list_accounts", { groupId: null });
-    account.value = list.find((a) => a.id === id) ?? null;
+    if (pendingId.value !== id) return;
+    const found = list.find((a) => a.id === id) ?? null;
+    if (!found) {
+      // 切行时账号消失才清空，否则保留旧内容，避免窗口闪白
+      if (account.value?.id !== id) account.value = null;
+      await hide();
+      return;
+    }
+    account.value = found;
   } catch {
-    account.value = null;
-  }
-  if (!account.value) {
-    await hide();
-    return;
+    if (pendingId.value !== id) return;
+    // 取数失败保留旧内容（切行动效不断），首次打开失败才收起
+    if (account.value === null) {
+      await hide();
+      return;
+    }
+  } finally {
+    if (pendingId.value === id) pendingId.value = null;
   }
   await nextTick();
   scheduleFit();
@@ -67,7 +80,7 @@ async function loadAccount(id: number) {
 /** “选择模型测试…”：悬停即展开三级模型列表，点击切换收起 */
 async function ensureModels() {
   const a = account.value;
-  if (!a || testing.value || modelsOpen.value) return;
+  if (!a || testing.value || modelsOpen.value || pendingId.value !== null) return;
   modelsOpen.value = true;
   models.value = [];
   loadingModels.value = true;
@@ -82,7 +95,7 @@ async function ensureModels() {
 }
 
 function toggleModels() {
-  if (!account.value || testing.value) return;
+  if (!account.value || testing.value || pendingId.value !== null) return;
   if (modelsOpen.value) {
     modelsOpen.value = false;
     models.value = [];
@@ -95,7 +108,7 @@ function toggleModels() {
 
 async function onTest(model?: string) {
   const a = account.value;
-  if (!a || testing.value) return;
+  if (!a || testing.value || pendingId.value !== null) return;
   testing.value = true;
   try {
     await emitTo("tray-menu", "submenu-test-start", { accountId: a.id });
@@ -124,7 +137,7 @@ async function onTest(model?: string) {
 
 async function onToggle() {
   const a = account.value;
-  if (!a || testing.value) return;
+  if (!a || testing.value || pendingId.value !== null) return;
   await hide();
   try {
     await invoke("set_schedulable", {
@@ -186,7 +199,7 @@ onBeforeUnmount(() => {
         <v-list density="compact" class="py-1 bg-transparent">
           <v-list-item
             density="compact"
-            :disabled="testing"
+            :disabled="testing || pendingId !== null"
             @click="onTest()"
             @contextmenu.stop.prevent="onTest()"
           >
@@ -198,7 +211,7 @@ onBeforeUnmount(() => {
           <v-list-item
             density="compact"
             :active="modelsOpen"
-            :disabled="testing"
+            :disabled="testing || pendingId !== null"
             @mouseenter="ensureModels"
             @click="toggleModels"
             @contextmenu.stop.prevent="toggleModels"
@@ -247,7 +260,7 @@ onBeforeUnmount(() => {
           </div>
           <v-list-item
             density="compact"
-            :disabled="testing"
+            :disabled="testing || pendingId !== null"
             @click="onToggle"
             @contextmenu.stop.prevent="onToggle"
           >
