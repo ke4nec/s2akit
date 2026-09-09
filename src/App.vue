@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   acceptCompliance,
   checkForUpdates,
@@ -38,12 +40,46 @@ const progressText = computed(() => {
   return total > 0 ? `${fmt(progress)} / ${fmt(total)}` : fmt(progress);
 });
 
+// 自绘标题栏的窗口控制（主窗口去掉了原生边框）
+const appWindow = getCurrentWindow();
+const maximized = ref(false);
+let unlistenResize: UnlistenFn | undefined;
+
+async function refreshMaxState() {
+  try {
+    maximized.value = await appWindow.isMaximized();
+  } catch {
+    // 非 Tauri 环境（纯浏览器调试）忽略
+  }
+}
+
+function onMinimize() {
+  void appWindow.minimize();
+}
+function onToggleMaximize() {
+  void appWindow.toggleMaximize();
+}
+/** 与原生关窗一致：隐藏到托盘，真正退出走托盘菜单 */
+function onCloseToTray() {
+  void appWindow.hide();
+}
+
 onMounted(() => {
   if (!isTrayMenu) void init();
   // 启动 5 秒后静默检查更新；dev 构建跳过，避免开发态误触正式更新
   if (isMain && !import.meta.env.DEV) {
     window.setTimeout(() => void checkForUpdates(), 5000);
   }
+  if (isMain) {
+    void refreshMaxState();
+    void listen("tauri://resize", () => void refreshMaxState()).then((u) => {
+      unlistenResize = u;
+    });
+  }
+});
+
+onBeforeUnmount(() => {
+  unlistenResize?.();
 });
 </script>
 
@@ -51,7 +87,9 @@ onMounted(() => {
   <TraySubmenuApp v-if="isTraySubmenu" />
   <TrayMenuApp v-else-if="isTrayMenu" />
   <v-app v-else>
-    <v-app-bar flat density="compact" class="glass-bar">
+    <!-- 自绘标题栏（原生边框已去掉）：空 白区域可拖拽移动/双击最大化，
+         子控件自身没有 drag-region 属性不受影响 -->
+    <v-app-bar flat density="compact" class="glass-bar title-bar" data-tauri-drag-region>
       <!-- macOS 分段控件风格导航 -->
       <div class="seg-tabs" role="tablist">
         <button
@@ -68,12 +106,35 @@ onMounted(() => {
           <span>{{ t.label }}</span>
         </button>
       </div>
-      <v-spacer />
+      <v-spacer data-tauri-drag-region />
       <!-- 账号页工具栏传送目标：AccountsView 把分组选择/刷新渲染到此处，与导航合并为一行 -->
-      <div class="appbar-tools"></div>
-      <div class="auth-status" :title="store.auth?.email">
+      <div class="appbar-tools" data-tauri-drag-region></div>
+      <div class="auth-status" data-tauri-drag-region :title="store.auth?.email">
         <span class="status-dot" :class="store.auth ? 'status-dot--on' : 'status-dot--off'" />
         <span class="auth-email">{{ store.auth ? store.auth.email : "未登录" }}</span>
+      </div>
+      <div class="win-controls">
+        <button class="win-btn" type="button" title="最小化" aria-label="最小化" @click="onMinimize">
+          <v-icon icon="mdi-window-minimize" size="16" />
+        </button>
+        <button
+          class="win-btn"
+          type="button"
+          :title="maximized ? '向下还原' : '最大化'"
+          :aria-label="maximized ? '向下还原' : '最大化'"
+          @click="onToggleMaximize"
+        >
+          <v-icon :icon="maximized ? 'mdi-window-restore' : 'mdi-window-maximize'" size="14" />
+        </button>
+        <button
+          class="win-btn win-btn--close"
+          type="button"
+          title="关闭（保留在托盘）"
+          aria-label="关闭"
+          @click="onCloseToTray"
+        >
+          <v-icon icon="mdi-close" size="16" />
+        </button>
       </div>
     </v-app-bar>
 
@@ -268,7 +329,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-right: 20px;
+  margin-right: 12px;
   max-width: 320px;
   min-width: 0;
 }
@@ -294,6 +355,46 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+/* 窗口控制按钮：30px 圆角方块、灰悬浮；关闭按 Apple 红高亮 */
+.win-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 10px;
+  margin-left: 4px;
+}
+.win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: default;
+  transition:
+    background 0.15s var(--ease-out),
+    color 0.15s var(--ease-out);
+}
+.win-btn:hover {
+  background: rgba(118, 118, 128, 0.12);
+  color: hsl(var(--foreground));
+}
+.win-btn:active {
+  background: rgba(118, 118, 128, 0.2);
+}
+.win-btn--close:hover {
+  background: #ff3b30;
+  color: #fff;
+}
+.win-btn--close:active {
+  background: #d93025;
+  color: #fff;
+}
+
 /* 主内容：1200px 容器，桌面 24px / 窄屏 16px 边距 */
 .app-container {
   max-width: 1200px;
@@ -303,6 +404,12 @@ onMounted(() => {
   .app-container {
     padding: 16px;
   }
+}
+
+/* 自绘标题栏：文本不可选中，避免拖动窗口时误选；
+   空白区域由 data-tauri-drag-region 提供拖拽/双击最大化 */
+.title-bar {
+  user-select: none;
 }
 
 /* 合规确认对话框 */
