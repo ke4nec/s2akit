@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>s2akit · 主页面重设计（Clash Party 风格）</title>
+<style>
+  /* ============================================================
+     s2akit 主页面（账号页）重设计 · 与 design/settings.html 同风格
+     白卡表格 · 行首 3px 状态竖条 · 4px 小圆角徽标 · 12px 清晰徽标文字
+     语义色对齐 Apple 系统色板（与 main.ts Vuetify 主题一致）：
+     图形元素用标准色，小字文本用 HIG 加深版保证对比度
+     ============================================================ */
+  :root {
+    /* 中性色与设置页一致 */
+    --bg: #f2f3f5;
+    --card: #ffffff;
+    --divider: #ebeef5;
+    --border: #e4e7ed;
+    --text-1: #303133;
+    --text-2: #606266;
+    --text-3: #909399;
+    /* Apple 系统色（main.ts 主题原值） */
+    --primary: #007aff;
+    --primary-hover: #4da2ff;
+    --primary-active: #0066d6;
+    --fill: #f5f7fa;
+    --fill-hover: #eef1f6;
+    --sys-green: #34c759;
+    --sys-orange: #ff9500;
+    --sys-red: #ff3b30;
+    --sys-gray: #c7c7cc;
+    /* 文本态语义色：小字用 HIG 加深版（同 apple.css .s2a-flag 的 #C55300 先例），底色为系统色低透明 tint */
+    --success: #248a3d;  --success-bg: rgba(52, 199, 89, 0.13);
+    --warning: #c55300;  --warning-bg: rgba(255, 149, 0, 0.14);
+    --danger: #ff3b30;   --danger-bg: rgba(255, 59, 48, 0.12);
+    --info: #6e6e73;     --info-bg: rgba(142, 142, 147, 0.14);
+    --radius-card: 8px;
+    --radius-ctrl: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+      "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #dfe3e9 radial-gradient(circle at 30% 20%, #e9edf2 0%, #d6dbe2 60%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 24px 24px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- 应用窗口外壳（与设置页稿一致） ---------- */
+  .window {
+    width: 1060px;
+    max-width: 100%;
+    background: var(--bg);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.08),
+      0 24px 60px rgba(31, 35, 41, 0.22);
+  }
+
+  .appbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    padding: 0 20px 0 24px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px) saturate(120%);
+    border-bottom: 1px solid var(--divider);
+  }
+  .seg-tabs {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 9px;
+    background: rgba(118, 118, 128, 0.12);
+  }
+  .seg-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    font-size: 13px;
+    color: var(--text-3);
+    cursor: pointer;
+  }
+  .seg-tab.active {
+    background: #fff;
+    color: var(--text-1);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  }
+  .seg-tab svg { width: 15px; height: 15px; }
+  .appbar .spacer { flex: 1; }
+
+  /* 顶栏工具区：分组胶囊 + 刷新 + 测试全部 */
+  .group-pop {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    max-width: 240px;
+    padding: 0 8px 0 11px;
+    border: none;
+    border-radius: 7px;
+    background: rgba(118, 118, 128, 0.12);
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.78);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .group-pop:hover { background: rgba(118, 118, 128, 0.2); }
+  .group-pop .txt {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .group-pop svg { flex: none; width: 14px; height: 14px; color: rgba(0, 0, 0, 0.4); }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: rgba(118, 118, 128, 0.12); }
+  .icon-btn svg { width: 15px; height: 15px; }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 13px;
+    border: none;
+    border-radius: var(--radius-ctrl);
+    background: var(--primary);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-primary:active { background: var(--primary-active); }
+  .btn-primary svg { width: 14px; height: 14px; }
+
+  .auth-status { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-3); }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #34c759;
+    box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.15);
+  }
+
+  /* ---------- 主内容 ---------- */
+  .page {
+    padding: 24px;
+  }
+
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-card);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+  }
+
+  /* 卡片头：状态汇总（弥补取消整行底色后的全局概览）+ 右键提示 */
+  .summary {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-height: 44px;
+    padding: 6px 20px;
+    background: #fafbfc;
+    border-bottom: 1px solid var(--divider);
+  }
+  .sum-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .sum-item b { font-weight: 600; color: var(--text-1); }
+  .sum-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .sum-hint {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .sum-hint svg { width: 13px; height: 13px; opacity: 0.7; }
+
+  /* ---------- 账号表格 ---------- */
+  table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  thead th {
+    height: 38px;
+    padding: 0 12px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-3);
+    border-bottom: 1px solid var(--divider);
+    white-space: nowrap;
+  }
+  thead th:first-child { padding-left: 20px; }
+  thead th:last-child { padding-right: 20px; text-align: right; }
+  /* 排序列头：悬停文字加深；当前排序列标题更深 */
+  th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+  }
+  th.sortable:hover,
+  th.th-active {
+    color: var(--text-2);
+  }
+  /* Apple 风排序指示：成对 8×5px 小 chevron，未排序均为淡灰；
+     当前排序列方向对应的一枚点亮（上＝升序、下＝降序） */
+  .si {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .si svg {
+    display: block;
+    width: 8px;
+    height: 5px;
+    color: var(--sys-gray);
+  }
+  .si svg.on {
+    color: #6e6e73;
+  }
+
+  tbody td {
+    padding: 9px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid #f2f3f5;
+  }
+  tbody td:first-child { position: relative; padding-left: 20px; }
+  tbody td:last-child { padding-right: 20px; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--fill); }
+
+  /* 行首状态竖条：整行底色改为 3px 小竖块，行悬停也不变色 */
+  .bar {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 22px;
+    border-radius: 0 2px 2px 0;
+  }
+  .bar-ok     { background: var(--sys-green); }
+  .bar-warn   { background: var(--sys-orange); }
+  .bar-error  { background: var(--sys-red); }
+  .bar-off    { background: var(--sys-gray); }
+
+  /* 账号列：名称 + 元信息两行 */
+  .name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-1);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .meta {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 状态徽标：4px 小圆角、12px 字号、浅底深字（替代大圆角小字 chip） */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .tag-sm { height: 19px; padding: 0 6px; }
+  .tag-success { background: var(--success-bg); color: var(--success); }
+  .tag-danger  { background: var(--danger-bg);  color: var(--danger); }
+  .tag-warning { background: var(--warning-bg); color: var(--warning); }
+  .tag-info    { background: var(--info-bg);    color: var(--info); }
+
+  /* 调度列：iOS 风迷你开关（32×20），开＝Apple 绿、关＝系统灰轨道；限流/临时小徽标跟在开关后 */
+  .sw-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sw {
+    position: relative;
+    flex: none;
+    width: 32px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 10px;
+    background: rgba(120, 120, 128, 0.32);
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .sw::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sw:hover:not(:disabled) { background: rgba(120, 120, 128, 0.44); }
+  .sw.on { background: var(--sys-green); }
+  .sw.on::after { transform: translateX(12px); }
+  .sw.on:hover:not(:disabled) { background: #2db94e; }
+  .sw:disabled { opacity: 0.45; cursor: default; }
+  .sw:focus-visible {
+    outline: 2px solid rgba(0, 122, 255, 0.45);
+    outline-offset: 1px;
+  }
+
+  /* 数字列：13px 半粗 + 等宽数字，按阈值着色 */
+  .num {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .num .u { font-size: 11px; font-weight: 400; color: var(--text-3); margin-left: 1px; }
+  .num.ok  { color: var(--success); }
+  .num.mid { color: var(--warning); }
+  .num.bad { color: var(--danger); }
+  .num-none { font-size: 13px; color: var(--sys-gray); }
+
+  /* 测试中：灰色横线 shimmer 骨架（无旋转），首 token 与总耗时同款 */
+  .sk {
+    display: inline-block;
+    width: 56px;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.06) 25%,
+      rgba(0, 0, 0, 0.12) 37%,
+      rgba(0, 0, 0, 0.06) 63%
+    );
+    background-size: 400% 100%;
+    animation: sk-shimmer 1.4s ease infinite;
+  }
+  @keyframes sk-shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sk { animation: none; }
+  }
+
+  /* 备注列 */
+  .note {
+    display: block;
+    font-size: 12px;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .note.ok  { color: var(--success); }
+  .note.err { color: var(--danger); }
+  .note.none { color: var(--sys-gray); }
+
+  /* 操作列：安静的文字按钮，悬停浮起浅灰底 */
+  .c-act { text-align: right; white-space: nowrap; }
+  .act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 10px;
+    border: none;
+    border-radius: var(--radius-ctrl);
+    background: transparent;
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .act:hover { background: var(--fill-hover); }
+  .act.primary { color: var(--primary); font-weight: 500; }
+  .act.icon-only { width: 26px; padding: 0; }
+  .act svg { width: 14px; height: 14px; }
+  .act:disabled { opacity: 0.45; cursor: default; }
+  .act:disabled:hover { background: transparent; }
+
+  /* ---------- 卡片底分页条 ---------- */
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 46px;
+    padding: 6px 20px;
+    background: #fafbfc;
+    border-top: 1px solid var(--divider);
+  }
+  .pager-total {
+    font-size: 12px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .pager-total b { font-weight: 600; color: var(--text-1); }
+  .pager-right { display: flex; align-items: center; gap: 14px; }
+  .pager-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+  .pager-select {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 8px 0 10px;
+    border: none;
+    border-radius: var(--radius-ctrl);
+    background: var(--fill);
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .pager-select:hover { background: var(--fill-hover); }
+  .pager-select svg { width: 12px; height: 12px; color: var(--text-3); }
+  .pager-nav { display: flex; align-items: center; gap: 4px; }
+  .pg-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border: none;
+    border-radius: var(--radius-ctrl);
+    background: transparent;
+    color: var(--text-2);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .pg-btn:hover:not(:disabled):not(.pg-cur) { background: var(--fill); color: var(--text-1); }
+  .pg-btn:disabled { opacity: 0.35; cursor: default; }
+  .pg-btn svg { width: 14px; height: 14px; }
+  .pg-cur { background: var(--primary); color: #fff; font-weight: 600; }
+
+  /* ---------- 设计说明（不随实现） ---------- */
+  .notes {
+    width: 1060px;
+    max-width: 100%;
+    margin-top: 20px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.7;
+  }
+  .notes h2 { font-size: 12px; font-weight: 600; color: var(--text-1); margin-bottom: 4px; }
+  .notes code {
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    background: rgba(0, 122, 255, 0.08);
+    color: #0066d6;
+    padding: 0 4px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="window">
+    <!-- 顶栏：分段导航 + 分组胶囊 + 刷新 + 测试全部 + 登录状态 -->
+    <header class="appbar">
+      <nav class="seg-tabs" role="tablist">
+        <button class="seg-tab active" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          账号
+        </button>
+        <button class="seg-tab" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          设置
+        </button>
+      </nav>
+      <div class="spacer"></div>
+      <button class="group-pop" type="button">
+        <span class="txt">主力池 · anthropic（128）</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="icon-btn" type="button" title="刷新分组与账号">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button class="btn-primary" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 12l6-6"/></svg>
+        测试全部
+      </button>
+      <div class="auth-status">
+        <span class="status-dot"></span>
+        <span>admin@example.com</span>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="table-card">
+
+        <!-- 卡片头：状态计数汇总 + 右键提示（替代原整行底色的全局可读性） -->
+        <div class="summary">
+          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-green)"></span>正常 <b>96</b></span>
+          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-orange)"></span>限流 / 临时 <b>18</b></span>
+          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-red)"></span>错误 <b>9</b></span>
+          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-gray)"></span>停用 <b>5</b></span>
+          <span class="sum-hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l7 16 2.5-7.5L21 10z"/></svg>
+            右键行可快捷测试 / 启用禁用
+          </span>
+        </div>
+
+        <table>
+          <colgroup>
+            <col style="width: 216px" />
+            <col style="width: 84px" />
+            <col style="width: 132px" />
+            <col style="width: 104px" />
+            <col style="width: 96px" />
+            <col />
+            <col style="width: 150px" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="sortable">账号
+                <span class="si" aria-hidden="true">
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
+                </span>
+              </th>
+              <th class="sortable">状态
+                <span class="si" aria-hidden="true">
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
+                </span>
+              </th>
+              <th class="sortable">调度
+                <span class="si" aria-hidden="true">
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
+                </span>
+              </th>
+              <!-- 当前排序列：首 token 升序，上 chevron 点亮 -->
+              <th class="sortable th-active">首 token
+                <span class="si" aria-hidden="true">
+                  <svg class="on" viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
+                </span>
+              </th>
+              <th class="sortable">总耗时
+                <span class="si" aria-hidden="true">
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
+                </span>
+              </th>
+              <th class="sortable">备注 / 最近错误
+                <span class="si" aria-hidden="true">
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
+                </span>
+              </th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- 正常 + 已测（快） -->
+            <tr>
+              <td>
+                <span class="bar bar-ok"></span>
+                <div class="name" title="claude-main-01">claude-main-01</div>
+                <div class="meta">#12 · anthropic/oauth</div>
+              </td>
+              <td><span class="tag tag-success">正常</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
+              <td><span class="num ok">842<span class="u">ms</span></span></td>
+              <td><span class="num">3,120<span class="u">ms</span></span></td>
+              <td><span class="note ok">✓ 正常</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button">测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+
+            <!-- 限流 -->
+            <tr>
+              <td>
+                <span class="bar bar-warn"></span>
+                <div class="name" title="claude-main-02">claude-main-02</div>
+                <div class="meta">#13 · anthropic/oauth</div>
+              </td>
+              <td><span class="tag tag-success">正常</span></td>
+              <td>
+                <div class="sw-wrap">
+                  <button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button>
+                  <span class="tag tag-warning tag-sm">限流</span>
+                </div>
+              </td>
+              <td><span class="num mid">2,340<span class="u">ms</span></span></td>
+              <td><span class="num">6,905<span class="u">ms</span></span></td>
+              <td><span class="note err">429 Too Many Requests｜上游限流，稍后自动恢复</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button">测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+
+            <!-- 正常 + 未测 -->
+            <tr>
+              <td>
+                <span class="bar bar-ok"></span>
+                <div class="name" title="claude-api-03">claude-api-03</div>
+                <div class="meta">#14 · anthropic/api</div>
+              </td>
+              <td><span class="tag tag-success">正常</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
+              <td><span class="num-none">—</span></td>
+              <td><span class="num-none">—</span></td>
+              <td><span class="note none">—</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button">测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+
+            <!-- 临时不可调度 -->
+            <tr>
+              <td>
+                <span class="bar bar-warn"></span>
+                <div class="name" title="gemini-pro-01">gemini-pro-01</div>
+                <div class="meta">#15 · google/oauth</div>
+              </td>
+              <td><span class="tag tag-success">正常</span></td>
+              <td>
+                <div class="sw-wrap">
+                  <button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button>
+                  <span class="tag tag-warning tag-sm">临时</span>
+                </div>
+              </td>
+              <td><span class="num bad">5,890<span class="u">ms</span></span></td>
+              <td><span class="num">9,412<span class="u">ms</span></span></td>
+              <td><span class="note err">timeout｜上游响应超时，临时移出调度 10 分钟</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button">测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+
+            <!-- 测试中 -->
+            <tr>
+              <td>
+                <span class="bar bar-ok"></span>
+                <div class="name" title="gemini-flash-02">gemini-flash-02</div>
+                <div class="meta">#18 · google/api</div>
+              </td>
+              <td><span class="tag tag-success">正常</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号" disabled></button></div></td>
+              <td><span class="sk" aria-label="测试中"></span></td>
+              <td><span class="sk" aria-label="测试中"></span></td>
+              <td><span class="note none">—</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button" disabled>测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+
+            <!-- 正常 + 已测（快） -->
+            <tr>
+              <td>
+                <span class="bar bar-ok"></span>
+                <div class="name" title="claude-main-06">claude-main-06</div>
+                <div class="meta">#19 · anthropic/oauth</div>
+              </td>
+              <td><span class="tag tag-success">正常</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
+              <td><span class="num ok">1,064<span class="u">ms</span></span></td>
+              <td><span class="num">3,877<span class="u">ms</span></span></td>
+              <td><span class="note ok">✓ 正常</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button">测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+
+            <!-- 错误 -->
+            <tr>
+              <td>
+                <span class="bar bar-error"></span>
+                <div class="name" title="codex-01">codex-01</div>
+                <div class="meta">#16 · openai/api</div>
+              </td>
+              <td><span class="tag tag-danger">错误</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
+              <td><span class="num bad">✕</span></td>
+              <td><span class="num-none">—</span></td>
+              <td><span class="note err">401 Unauthorized｜令牌已过期，请重新授权</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button">测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+
+            <!-- 停用 -->
+            <tr>
+              <td>
+                <span class="bar bar-off"></span>
+                <div class="name" title="claude-main-05">claude-main-05</div>
+                <div class="meta">#17 · anthropic/oauth</div>
+              </td>
+              <td><span class="tag tag-info">停用</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw" role="switch" aria-checked="false" aria-label="启用该账号"></button></div></td>
+              <td><span class="num-none">—</span></td>
+              <td><span class="num-none">—</span></td>
+              <td><span class="note none">—</span></td>
+              <td class="c-act">
+                <button class="act primary" type="button">测试</button>
+                <button class="act icon-only" type="button" title="选择模型测试">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="6" y2="16.5"/><line x1="12" y1="8" x2="18" y2="16.5"/></svg>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 卡片底：分页条（与卡片头汇总条同底色，形成上下呼应） -->
+        <div class="pager">
+          <span class="pager-total">共 <b>128</b> 个账号</span>
+          <div class="pager-right">
+            <span class="pager-size">
+              <span class="pager-size-label">每页</span>
+              <button class="pager-select" type="button">
+                10 条
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </span>
+            <div class="pager-nav">
+              <button class="pg-btn" type="button" disabled title="上一页">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button class="pg-btn pg-cur" type="button">1</button>
+              <button class="pg-btn" type="button">2</button>
+              <button class="pg-btn" type="button">3</button>
+              <button class="pg-btn" type="button" title="下一页">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 设计说明（实现参考，不属于界面本身） -->
+  <aside class="notes">
+    <h2>设计说明 · 相对现版主页面的改动</h2>
+    行状态：<b>取消整行底色</b>，改为行首 <code>3px × 22px</code> 状态竖条，颜色取 Apple 系统色（与 <code>main.ts</code> 主题一致）：错误红 <code>#FF3B30</code> ＞ 限流/临时橙 <code>#FF9500</code> ＞ 正常绿 <code>#34C759</code> ＞ 停用灰 <code>#C7C7CC</code>，优先级与原 <code>rowProps</code> 一致；卡片头新增一行<b>状态计数汇总</b>弥补全局概览。<br />
+    状态徽标：原大圆角小字 chip 改为 <b>4px 小圆角、22px 高、12px/500 字号</b>的浅底深字徽标；底色为对应系统色 12-14% 透明 tint，文字用 HIG 加深版（绿 <code>#248A3D</code>、橙 <code>#C55300</code>，后者同 <code>apple.css</code> 的 <code>.s2a-flag</code>）保证小字对比度。<br />
+    调度开关：原操作列「禁用/启用」文字按钮效果不明显，改为<b>iOS 风迷你开关</b>（32×20，轨道圆角 10px、白色圆钮带投影）放进「调度」列，替代原「圆点 + 文字」——开启＝Apple 绿 <code>#34C759</code>、关闭＝系统灰轨 <code>rgba(120,120,128,0.32)</code>，状态一眼可辨且点击即切换（macOS 设置页同款形态）；「限流 / 临时」19px 小徽标跟在开关后；测试中开关禁用置灰。操作列只保留「测试 + 选择模型」，列宽 196→150。<br />
+    排序图标：可排序列头为<b>成对 8×5px 小 chevron</b>（淡灰 <code>#C7C7CC</code>，上＋下，提示可点）；当前排序列标题加深为 <code>#606266</code>，方向对应的 chevron 点亮 <code>#6E6E73</code>（上＝升序、下＝降序，macOS 表头排序指示语义）；悬停列头文字加深。实现：v-data-table 表头用 <code>#header.*</code> 插槽或 <code>sort-icon</code> 自绘同款。<br />
+    数字列：首 token / 总耗时改为 <b>13px 半粗 + 等宽数字</b>，按阈值着色（&lt;2s 绿、&lt;5s 橙、其余红，同加深版文本色），单位 ms 用 11px 弱化；测试中两列显示<b>同款灰色横线骨架 shimmer</b>（非旋转，扫光 1.4s 循环，尊重系统减弱动效设置），操作列按钮禁用置灰、不显示转圈，避免动效重复。<br />
+    分页：卡片底部分页条与卡片头汇总条同底色（<code>#FAFBFC</code>）上下呼应；左侧「共 N 个账号」，右侧每页条数选择器（填充式 28px、圆角 6px、<b>默认 10 条</b>，与主窗口默认高度「10 行无滚动」匹配）+ 页码按钮（28px、6px 圆角，当前页 Apple 蓝底白字，首/末页禁用对应箭头；页数 ≤7 全量展示，>7 收敛为 首页/尾页/当前±1 加省略号）；空分组（0 账号）时整条隐藏；实现用 v-data-table 的 <code>#bottom</code> 插槽定制替换默认 footer；主窗口默认/最小尺寸 1000×640。<br />
+容器与顶栏：表格卡片与设置页同规格（白卡 8px 圆角、<code>#EBEEF5</code> 边框、1px 行分隔 <code>#F2F3F5</code>、悬停 <code>#F5F7FA</code>）；顶栏保持分段导航 + 分组胶囊 + 刷新 + 「测试全部」主按钮（Apple 蓝 <code>#007AFF</code>，悬停 <code>#4DA2FF</code>、按下 <code>#0066D6</code>）。交互不变：行悬停、右键快捷菜单、列排序（点击开关需 <code>stopPropagation</code> 防止触发行/排序）。
+  </aside>
+
+</body>
+</html>

@@ -880,14 +880,6 @@ pub async fn set_schedulable(
     let state = app.state::<AppState>();
     let http = state.http.clone();
     let base = state.config_snapshot().base();
-    let name = state
-        .accounts
-        .read()
-        .unwrap()
-        .iter()
-        .find(|a| a.id == account_id)
-        .map(|a| a.name.clone())
-        .unwrap_or_else(|| format!("#{account_id}"));
     drop(state);
 
     authed(&app, move |token| {
@@ -897,9 +889,7 @@ pub async fn set_schedulable(
     })
     .await?;
 
-    if schedulable {
-        notify(&app, &format!("已启用账号：{name}"));
-    }
+    // 启用/禁用不打系统通知：开关状态本身即反馈，失败走 Err 由前端 snackbar 提示
     refresh_accounts_task(&app).await
 }
 

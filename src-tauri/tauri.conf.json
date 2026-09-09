@@ -16,9 +16,9 @@
         "title": "s2akit",
         "visible": false,
         "width": 1000,
-        "height": 700,
-        "minWidth": 880,
-        "minHeight": 580
+        "height": 640,
+        "minWidth": 1000,
+        "minHeight": 640
       },
       {
         "label": "tray-menu",
