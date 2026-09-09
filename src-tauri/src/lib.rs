@@ -57,11 +57,16 @@ pub fn run() {
             // 否则亚克力铺满矩形、四角露出方形底（Win10 忽略，保持方形）
             #[cfg(windows)]
             {
+                // 主窗口去掉原生边框后圆角不保证保留（tao 对无装饰窗口的处理不定），
+                // 显式声明 DWM 圆角偏好，与 Win11 系统窗口观感一致；最大化时系统自动回直角
+                if let Some(main) = app.get_webview_window("main") {
+                    tray::round_window_corners(&main);
+                }
                 if let Some(menu) = app.get_webview_window("tray-menu") {
-                    tray::round_menu_corners(&menu);
+                    tray::round_window_corners(&menu);
                 }
                 if let Some(sub) = app.get_webview_window("tray-submenu") {
-                    tray::round_menu_corners(&sub);
+                    tray::round_window_corners(&sub);
                 }
             }
 

@@ -54,14 +54,14 @@ async function refreshMaxState() {
 }
 
 function onMinimize() {
-  void appWindow.minimize();
+  void appWindow.minimize().catch(() => {});
 }
 function onToggleMaximize() {
-  void appWindow.toggleMaximize();
+  void appWindow.toggleMaximize().catch(() => {});
 }
 /** 与原生关窗一致：隐藏到托盘，真正退出走托盘菜单 */
 function onCloseToTray() {
-  void appWindow.hide();
+  void appWindow.hide().catch(() => {});
 }
 
 onMounted(() => {
@@ -72,9 +72,13 @@ onMounted(() => {
   }
   if (isMain) {
     void refreshMaxState();
-    void listen("tauri://resize", () => void refreshMaxState()).then((u) => {
-      unlistenResize = u;
-    });
+    void listen("tauri://resize", () => void refreshMaxState())
+      .then((u) => {
+        unlistenResize = u;
+      })
+      .catch(() => {
+        // 非 Tauri 环境（纯浏览器调试）忽略
+      });
   }
 });
 

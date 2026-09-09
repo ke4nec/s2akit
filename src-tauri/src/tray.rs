@@ -126,11 +126,11 @@ fn place_menu(app: &AppHandle, w: &tauri::WebviewWindow, logical_h: f64) {
     let _ = w.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
 
-/// Windows：DWM 圆角裁剪菜单窗口本身。CSS 圆角只切网页内容，窗口级亚克力会铺满
+/// Windows：DWM 圆角裁剪无装饰窗口本身。CSS 圆角只切网页内容，窗口级亚克力会铺满
 /// 整个矩形，四角不裁就会露出方形底（背景去不掉的观感）。此处半径与 CSS
 /// border-radius 取一致，边缘严丝合缝；Win10 不支持该属性会自动忽略（保持方形）。
 #[cfg(windows)]
-pub(crate) fn round_menu_corners(w: &tauri::WebviewWindow) {
+pub(crate) fn round_window_corners(w: &tauri::WebviewWindow) {
     use windows::Win32::Graphics::Dwm::{
         DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
     };
