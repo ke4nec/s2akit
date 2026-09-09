@@ -111,6 +111,39 @@ function onHeaderClick(e: Event) {
   openGroupsSubmenu(anchor ? rowTopOf(anchor) : 32);
 }
 
+/** 顶部额度点击：仅强制刷新即时用量，不碰账号列表（菜单不抖、不关子菜单）。
+ * 旋转图标保底展示 1000ms：接口太快会导致图标一闪而过，反而像闪烁 */
+const USAGE_MIN_SPIN_MS = 1000;
+const reloadingUsage = ref(false);
+const usageFlash = ref(false);
+let flashTimer: number | null = null;
+async function refreshUsage() {
+  if (reloadingUsage.value) return;
+  reloadingUsage.value = true;
+  const t0 = Date.now();
+  try {
+    keyUsage.value = await invoke<KeyUsageToday | null>("get_key_usage_today", {
+      force: true,
+    });
+  } catch {
+    // 静默，旧值保留
+  } finally {
+    const wait = USAGE_MIN_SPIN_MS - (Date.now() - t0);
+    if (wait > 0) await new Promise<void>((r) => window.setTimeout(r, wait));
+    reloadingUsage.value = false;
+    // 转完再闪一下，明确告知已更新为即时值
+    usageFlash.value = false;
+    if (flashTimer !== null) window.clearTimeout(flashTimer);
+    requestAnimationFrame(() => {
+      usageFlash.value = true;
+      flashTimer = window.setTimeout(() => {
+        usageFlash.value = false;
+        flashTimer = null;
+      }, 650);
+    });
+  }
+}
+
 /** 重新加载菜单数据；refreshUsage=true 绕过后端缓存强制刷新顶部额度 */
 async function reload(refreshUsage = false) {
   closeSubmenu();
@@ -391,17 +424,29 @@ onBeforeUnmount(() => {
             :open-delay="300"
           >
             <template #activator="{ props }">
-              <span v-bind="props" class="usage-stats">
-                <v-icon icon="mdi-chart-areaspline" size="12" color="primary" />
+              <button
+                v-bind="props"
+                type="button"
+                class="usage-stats"
+                :class="{ 'usage-flash': usageFlash }"
+                :disabled="reloadingUsage"
+                @click="refreshUsage"
+              >
+                <v-icon
+                  :icon="reloadingUsage ? 'mdi-refresh' : 'mdi-chart-areaspline'"
+                  size="12"
+                  color="primary"
+                  :class="{ 'spin-icon': reloadingUsage }"
+                />
                 今日 {{ fmtCost(keyUsage.cost) }} · {{ fmtM(keyUsage.total_tokens) }}
-              </span>
+              </button>
             </template>
           </v-tooltip>
         </div>
         <v-divider />
 
         <div class="tray-list" @scroll="onListScroll">
-          <v-progress-linear v-if="loading" indeterminate color="primary" height="2" />
+          <v-progress-linear v-if="loading || reloadingUsage" indeterminate color="primary" height="2" />
           <!-- 账号列表：悬停或点击账户行，在主菜单旁另起窗口级联二级菜单（主列表保持可见） -->
           <v-list density="compact" class="py-0 bg-transparent">
             <v-list-item
@@ -607,12 +652,50 @@ html.s2a-tray-doc body:focus-visible {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 2px 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
   white-space: nowrap;
   font-size: 11px;
   color: rgba(0, 0, 0, 0.5);
   font-variant-numeric: tabular-nums;
   user-select: none;
+  cursor: pointer;
+}
+.usage-stats:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+}
+.usage-stats:disabled {
   cursor: default;
+}
+/* 刷新中：图标持续旋转，明确“正在取数” */
+@keyframes usage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin-icon {
+  animation: usage-spin 0.9s linear infinite;
+}
+/* 到值后：蓝色辉光闪一下，明确“已更新为即时值” */
+@keyframes usage-flash {
+  0% {
+    background: rgba(0, 122, 255, 0.16);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.usage-flash {
+  animation: usage-flash 0.65s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin-icon,
+  .usage-flash {
+    animation: none;
+  }
 }
 /* 账号多时只允许账号区域内部滚动，底部操作区固定不被压缩 */
 .tray-actions {
