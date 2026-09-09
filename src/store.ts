@@ -1,6 +1,9 @@
 import { reactive } from "vue";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import type {
   AccountBrief,
   AppConfig,
@@ -31,6 +34,18 @@ export const store = reactive({
   /** 非 null 时显示合规确认对话框 */
   compliance: null as { info: ComplianceInfo | null } | null,
   snack: { show: false, message: "", color: "info" as string },
+  /** 应用更新流程：available 弹窗询问 → downloading 带进度 → ready 校验通过待安装 */
+  updater: {
+    current: "",
+    version: "",
+    notes: "",
+    status: "idle" as "idle" | "available" | "downloading" | "ready",
+    checking: false,
+    installing: false,
+    dialog: false,
+    progress: 0,
+    total: 0,
+  },
 });
 
 export function snack(message: string, color = "info") {
@@ -97,6 +112,7 @@ function applyProgress(p: TestProgress) {
 }
 
 export async function init() {
+  store.updater.current = await getVersion();
   store.config = await invoke<AppConfig>("get_config");
   await listen<AccountBrief[]>("accounts-updated", (ev) => {
     store.accounts = ev.payload;
@@ -233,4 +249,88 @@ export async function logout() {
 async function afterLogin() {
   await refreshGroups();
   await refreshAccounts();
+}
+
+/** 待安装的更新资源（后端句柄），丢弃时需 close 释放 */
+let pendingUpdate: Update | null = null;
+
+export async function checkForUpdates(manual = false) {
+  if (store.updater.status === "ready") {
+    // 已有校验通过的更新待安装，直接弹窗确认即可
+    store.updater.dialog = true;
+    return;
+  }
+  if (store.updater.checking || store.updater.status === "downloading") return;
+  store.updater.checking = true;
+  try {
+    const stale = pendingUpdate;
+    pendingUpdate = null;
+    void stale?.close();
+    const update = await check({ timeout: 20000 });
+    if (update) {
+      pendingUpdate = update;
+      store.updater.version = update.version;
+      store.updater.notes = update.body ?? "";
+      store.updater.status = "available";
+      store.updater.dialog = true;
+    } else if (manual) {
+      snack(`已是最新版本 v${store.updater.current}`, "success");
+    }
+  } catch (e) {
+    // 自动检查失败保持静默（离线/网络波动不打扰启动），手动检查才提示
+    if (manual) handleErr(e);
+  } finally {
+    store.updater.checking = false;
+  }
+}
+
+export async function downloadUpdate() {
+  if (!pendingUpdate || store.updater.status === "downloading") return;
+  store.updater.status = "downloading";
+  store.updater.progress = 0;
+  store.updater.total = 0;
+  try {
+    // download 正常返回即代表 minisign 签名校验通过（完整性检查），
+    // 安装包暂存后端，等待用户确认 install
+    await pendingUpdate.download((ev: DownloadEvent) => {
+      if (ev.event === "Started") {
+        store.updater.total = ev.data.contentLength ?? 0;
+      } else if (ev.event === "Progress") {
+        store.updater.progress += ev.data.chunkLength;
+      }
+    });
+    store.updater.status = "ready";
+    // 下载期间用户可能收起对话框转后台，完成后重新弹出确认安装
+    store.updater.dialog = true;
+  } catch (e) {
+    store.updater.status = "available";
+    handleErr(e);
+  }
+}
+
+export async function installUpdate() {
+  if (!pendingUpdate || store.updater.installing) return;
+  store.updater.installing = true;
+  try {
+    // Windows：拉起 NSIS 安装器并退出当前进程，安装完成后自动重启应用；
+    // relaunch 是非 Windows 平台的兜底（正常执行不到）
+    await pendingUpdate.install();
+    await relaunch();
+  } catch (e) {
+    store.updater.installing = false;
+    handleErr(e);
+  }
+}
+
+/** 关闭更新对话框：available 态丢弃本次更新，downloading/ready 态保留后台继续 */
+export function dismissUpdate() {
+  store.updater.dialog = false;
+  if (store.updater.status === "available") {
+    store.updater.status = "idle";
+    store.updater.version = "";
+    store.updater.notes = "";
+    const stale = pendingUpdate;
+    pendingUpdate = null;
+    void stale?.close();
+  }
 }

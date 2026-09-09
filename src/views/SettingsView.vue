@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { login, saveConfig, store, submit2fa } from "../store";
+import { checkForUpdates, installUpdate, login, saveConfig, store, submit2fa } from "../store";
 import type { AppConfig } from "../types";
 
 function defaultConfig(): AppConfig {
@@ -72,6 +72,20 @@ async function doSaveAndLogin() {
 async function doSubmit2fa() {
   if (!totpCode.value.trim()) return;
   await submit2fa(totpCode.value.trim());
+}
+
+/** 更新状态提示：下载中/已就绪时显示在按钮左侧 */
+const updateHint = computed(() => {
+  const u = store.updater;
+  if (u.status === "downloading") return `正在下载 v${u.version}…`;
+  if (u.status === "ready") return `v${u.version} 已就绪`;
+  return "";
+});
+
+function onCheckUpdate() {
+  // 已有校验通过的更新时按钮变为「立即安装」，否则发起检查（有新版会弹统一对话框）
+  if (store.updater.status === "ready") void installUpdate();
+  else void checkForUpdates(true);
 }
 </script>
 
@@ -210,6 +224,38 @@ async function doSubmit2fa() {
         </div>
         <div class="ctrl">
           <input v-model.number="form.usage_refresh_minutes" class="ctrl-input ctrl-input--narrow" type="number" aria-label="额度刷新间隔（分钟）" min="1" max="1440" />
+        </div>
+      </div>
+    </section>
+
+    <!-- 分组四：关于 -->
+    <section class="group animate-apple-fade-in apple-delay-3">
+      <header class="group-head">
+        <v-icon icon="mdi-information" size="18" />
+        <div class="group-head-text">
+          <div class="group-title">关于</div>
+          <div class="group-sub">当前版本与软件更新，正式版经 GitHub Actions 构建发布并签名校验</div>
+        </div>
+      </header>
+      <div class="row">
+        <div class="row-label">当前版本</div>
+        <div class="ctrl">
+          <span class="about-version">v{{ store.updater.current || "…" }}</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-label">软件更新</div>
+        <div class="ctrl update-ctrl">
+          <span v-if="updateHint" class="update-hint">{{ updateHint }}</span>
+          <v-btn
+            color="primary"
+            variant="tonal"
+            :loading="store.updater.checking"
+            :disabled="store.updater.status === 'downloading'"
+            @click="onCheckUpdate"
+          >
+            {{ store.updater.status === "ready" ? "立即安装" : "检查更新" }}
+          </v-btn>
         </div>
       </div>
     </section>
@@ -395,6 +441,30 @@ async function doSubmit2fa() {
 .save-bar .v-btn {
   height: 34px;
   min-width: 96px;
+}
+
+/* 关于分组：版本号与更新操作 */
+.about-version {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+.update-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.update-ctrl .v-btn {
+  height: 32px;
+  min-width: 88px;
+  padding: 0 15px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.update-hint {
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
 }
 
 /* 窄窗兜底：标签与控件上下堆叠（正常窗口 minWidth 880 不会触发） */

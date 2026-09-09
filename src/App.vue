@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { computed, onMounted } from "vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { acceptCompliance, init, store } from "./store";
+import {
+  acceptCompliance,
+  checkForUpdates,
+  dismissUpdate,
+  downloadUpdate,
+  init,
+  installUpdate,
+  store,
+} from "./store";
 import AccountsView from "./views/AccountsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import TrayMenuApp from "./views/TrayMenuApp.vue";
@@ -11,14 +19,31 @@ import TraySubmenuApp from "./views/TraySubmenuApp.vue";
 // 账号级联子菜单是另一个独立小窗口（#tray-submenu），主菜单宽度不变
 const isTraySubmenu = window.location.hash.includes("tray-submenu");
 const isTrayMenu = !isTraySubmenu && window.location.hash.includes("tray-menu");
+// 更新检查只在主窗口进行，托盘小窗口不参与
+const isMain = !isTrayMenu && !isTraySubmenu;
 
 const tabs = [
   { value: "accounts", label: "账号", icon: "mdi-format-list-bulleted" },
   { value: "settings", label: "设置", icon: "mdi-cog" },
 ] as const;
 
+const downloadPercent = computed(() => {
+  const { progress, total } = store.updater;
+  return total > 0 ? Math.min(100, (progress / total) * 100) : 0;
+});
+
+const progressText = computed(() => {
+  const { progress, total } = store.updater;
+  const fmt = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return total > 0 ? `${fmt(progress)} / ${fmt(total)}` : fmt(progress);
+});
+
 onMounted(() => {
   if (!isTrayMenu) void init();
+  // 启动 5 秒后静默检查更新；dev 构建跳过，避免开发态误触正式更新
+  if (isMain && !import.meta.env.DEV) {
+    window.setTimeout(() => void checkForUpdates(), 5000);
+  }
 });
 </script>
 
@@ -107,13 +132,75 @@ onMounted(() => {
             </v-btn>
           </div>
         </div>
-        <div class="compliance-footer">
+          <div class="compliance-footer">
           <v-btn
             color="primary"
             :disabled="!store.compliance.info"
             @click="acceptCompliance"
           >
             我已阅读并同意
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- 应用更新：发现新版本询问 → 后台下载（可收起）→ 校验通过后确认安装重启 -->
+    <v-dialog :model-value="store.updater.dialog" persistent max-width="520">
+      <v-card v-if="store.updater.dialog" rounded="xl" class="update-card">
+        <div class="update-body">
+          <div class="update-title">软件更新</div>
+          <template v-if="store.updater.status === 'available'">
+            <p class="update-text">
+              发现新版本 <span class="update-version">v{{ store.updater.version }}</span>（当前 v{{ store.updater.current }}），是否下载更新？
+            </p>
+            <div v-if="store.updater.notes" class="update-notes">{{ store.updater.notes }}</div>
+          </template>
+          <div v-else-if="store.updater.status === 'downloading'">
+            <p class="update-text">正在下载 v{{ store.updater.version }}…</p>
+            <v-progress-linear :model-value="downloadPercent" rounded height="8" color="primary" />
+            <p class="update-progress-text">{{ progressText }}</p>
+          </div>
+          <p v-else-if="store.updater.status === 'ready'" class="update-text">
+            v{{ store.updater.version }} 下载完成，完整性校验通过。是否立即安装并重启应用？
+          </p>
+        </div>
+        <div class="update-footer">
+          <v-btn
+            v-if="store.updater.status === 'downloading'"
+            variant="text"
+            @click="dismissUpdate"
+          >
+            后台下载
+          </v-btn>
+          <v-btn
+            v-else-if="store.updater.status === 'available'"
+            variant="text"
+            @click="dismissUpdate"
+          >
+            暂不更新
+          </v-btn>
+          <v-btn
+            v-else
+            variant="text"
+            :disabled="store.updater.installing"
+            @click="dismissUpdate"
+          >
+            稍后
+          </v-btn>
+          <v-btn
+            v-if="store.updater.status === 'available'"
+            color="primary"
+            @click="downloadUpdate"
+          >
+            立即更新
+          </v-btn>
+          <v-btn
+            v-else-if="store.updater.status === 'ready'"
+            color="primary"
+            :loading="store.updater.installing"
+            @click="installUpdate"
+          >
+            立即安装
           </v-btn>
         </div>
       </v-card>
@@ -251,6 +338,52 @@ onMounted(() => {
 .compliance-footer {
   display: flex;
   justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* 应用更新对话框（沿用合规对话框风格） */
+.update-card {
+  padding: 24px 24px 20px;
+}
+.update-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+.update-text {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+}
+.update-version {
+  font-weight: 600;
+  color: hsl(var(--accent));
+}
+.update-notes {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: hsl(var(--muted));
+  font-size: 13px;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  white-space: pre-line;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.update-progress-text {
+  margin-top: 8px;
+  text-align: right;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+.update-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
   margin-top: 20px;
 }
 </style>

@@ -1,0 +1,45 @@
+# 发布流水线：推送 v* 标签触发，构建 Windows NSIS 安装包并发布 GitHub Release。
+# tauri-action 检测到 updater 配置后会自动生成 latest.json（含各产物 minisign 签名），
+# 客户端即通过 releases/latest/download/latest.json 检查与校验更新。
+# 发版前需同步升三处版本号：package.json / src-tauri/Cargo.toml / src-tauri/tauri.conf.json
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "s2akit ${{ github.ref_name }}"
+          releaseBody: "见附件资产下载安装；已安装用户可由应用内自动更新升级。"
+          releaseDraft: false
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc

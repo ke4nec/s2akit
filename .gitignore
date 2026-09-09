@@ -15,6 +15,9 @@ dist-ssr
 # ZCode 工作区（计划等本地文件）
 .zcode/
 
+# 自动更新签名私钥（公钥在 tauri.conf.json，私钥只留在本机/CI Secrets）
+.tauri/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
