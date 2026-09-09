@@ -11,7 +11,6 @@ import type {
   AuthInfo,
   ComplianceInfo,
   GroupBrief,
-  KeyUsageToday,
   LoginReply,
   ModelBrief,
   TestProgress,
@@ -19,13 +18,11 @@ import type {
 } from "./types";
 
 export const store = reactive({
-  tab: "accounts" as "accounts" | "settings",
+  tab: "accounts" as "accounts" | "keys" | "settings",
   config: null as AppConfig | null,
   auth: null as AuthInfo | null,
   groups: [] as GroupBrief[],
   accounts: [] as AccountBrief[],
-  /** 当前 API Key 当天用量（右上角悬停展示，与托盘菜单同源） */
-  keyUsage: null as KeyUsageToday | null,
   results: {} as Record<number, TestResult>,
   testingIds: new Set<number>(),
   loadingAccounts: false,
@@ -130,20 +127,6 @@ export async function init() {
   if (store.auth) {
     await refreshGroups(false);
     await refreshAccounts(false);
-    await refreshKeyUsage();
-  }
-}
-
-/** 刷新当天用量（后端带缓存，悬停时调用开销小） */
-export async function refreshKeyUsage() {
-  if (!store.auth) {
-    store.keyUsage = null;
-    return;
-  }
-  try {
-    store.keyUsage = await invoke<KeyUsageToday | null>("get_usage_today");
-  } catch {
-    // 静默，保持旧值
   }
 }
 
@@ -257,7 +240,6 @@ export async function logout() {
     store.accounts = [];
     store.results = {};
     store.testingIds.clear();
-    store.keyUsage = null;
     snack("已退出登录", "info");
   } catch (e) {
     handleErr(e);
@@ -267,7 +249,6 @@ export async function logout() {
 async function afterLogin() {
   await refreshGroups();
   await refreshAccounts();
-  await refreshKeyUsage();
 }
 
 /** 待安装的更新资源（后端句柄），丢弃时需 close 释放 */

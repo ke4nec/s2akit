@@ -10,10 +10,10 @@ import {
   downloadUpdate,
   init,
   installUpdate,
-  refreshKeyUsage,
   store,
 } from "./store";
 import AccountsView from "./views/AccountsView.vue";
+import KeysView from "./views/KeysView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import TrayMenuApp from "./views/TrayMenuApp.vue";
 import TraySubmenuApp from "./views/TraySubmenuApp.vue";
@@ -26,31 +26,13 @@ const isTrayMenu = !isTraySubmenu && window.location.hash.includes("tray-menu");
 const isMain = !isTrayMenu && !isTraySubmenu;
 
 const tabs = [
-  { value: "accounts", label: "账号", icon: "mdi-format-list-bulleted" },
+  { value: "accounts", label: "Group", icon: "mdi-format-list-bulleted" },
+  { value: "keys", label: "API Key", icon: "mdi-key" },
   { value: "settings", label: "设置", icon: "mdi-cog" },
 ] as const;
 
-/** token 数格式化为多少 M（与托盘菜单同口径） */
-function fmtM(n: number): string {
-  const m = n / 1e6;
-  return `${m >= 100 ? m.toFixed(0) : m >= 10 ? m.toFixed(1) : m.toFixed(2)}M`;
-}
-
-function fmtCost(c: number): string {
-  return `$${c >= 1000 ? c.toFixed(0) : c >= 100 ? c.toFixed(1) : c.toFixed(2)}`;
-}
-
-/** 右上角悬停：当天用量（与托盘菜单顶部同源同格式），无数据时回退显示邮箱 */
-const authTip = computed(() => {
-  const u = store.keyUsage;
-  if (!u) return store.auth?.email ?? "";
-  return `「${u.key_name}」今日 ${u.requests} 次请求\n输入 ${fmtM(u.input_tokens)} · 输出 ${fmtM(u.output_tokens)} · 缓存 ${fmtM(u.cache_tokens)}\n费用 ${fmtCost(u.cost)} · 共 ${fmtM(u.total_tokens)}`;
-});
-
-/** 悬停即刷新（后端带缓存，开销小），保证看到的是即时值 */
-function onAuthEnter() {
-  void refreshKeyUsage();
-}
+/** 右上角悬停显示完整邮箱（可见文案有省略截断） */
+const authTip = computed(() => store.auth?.email ?? "");
 
 const downloadPercent = computed(() => {
   const { progress, total } = store.updater;
@@ -161,7 +143,7 @@ onBeforeUnmount(() => {
       <v-spacer data-tauri-drag-region />
       <v-tooltip :text="authTip" :disabled="!authTip" location="bottom" content-class="apple-tip">
         <template #activator="{ props }">
-          <div class="auth-status" v-bind="props" data-tauri-drag-region @mouseenter="onAuthEnter">
+          <div class="auth-status" v-bind="props" data-tauri-drag-region>
             <span class="status-dot" :class="store.auth ? 'status-dot--on' : 'status-dot--off'" />
             <span class="auth-email">{{ store.auth ? store.auth.email : "未登录" }}</span>
           </div>
@@ -200,6 +182,9 @@ onBeforeUnmount(() => {
           <v-window v-model="store.tab">
             <v-window-item value="accounts">
               <AccountsView />
+            </v-window-item>
+            <v-window-item value="keys">
+              <KeysView />
             </v-window-item>
             <v-window-item value="settings">
               <SettingsView />

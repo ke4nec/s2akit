@@ -31,6 +31,9 @@ export interface KeyBrief {
   key: string;
   status: string;
   group_id: number | null;
+  /** 总额度（0 表示不限量）与已用额度 */
+  quota: number;
+  quota_used: number;
 }
 
 export interface GroupBrief {

@@ -1,0 +1,487 @@
+/* ============================================================
+   表格体系共享样式：账号页 / Key 页同源（s2a- 前缀全局命名约定，
+   见 AccountsView 尾部非 scoped 块注释；与 apple.css 的 .s2a-flag 同理）。
+   由 AccountsView.vue scoped 样式整体迁移，保持选择器与顺序不变，
+   仅剥离 :deep()（本文件非 scoped，直接写后代选择器）。
+   ============================================================ */
+
+/* 表格卡片容器：白底 + 发丝边框 + 8px 圆角（对齐 design/accounts.html） */
+.table-card {
+  background: hsl(var(--background));
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.03);
+}
+
+/* 卡片头状态汇总：左侧状态计数，右侧分组选择 + 刷新 */
+.s2a-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 44px;
+  padding: 6px 20px;
+  background: #fafbfc;
+  border-bottom: 1px solid #ebeef5;
+}
+.s2a-summary-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.s2a-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #606266;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.s2a-sum b {
+  font-weight: 600;
+  color: #303133;
+}
+.s2a-sum-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.s2a-dot--ok { background: #34c759; }
+.s2a-dot--warn { background: #ff9500; }
+.s2a-dot--error { background: #ff3b30; }
+.s2a-dot--off { background: #c7c7cc; }
+/* 行首状态竖条：Apple 系统色，替代原整行底色；绝对定位于行首（td 为定位锚） */
+.s2a-bar {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 22px;
+  border-radius: 0 2px 2px 0;
+}
+.s2a-bar--ok { background: #34c759; }
+.s2a-bar--warn { background: #ff9500; }
+.s2a-bar--error { background: #ff3b30; }
+.s2a-bar--off { background: #c7c7cc; }
+
+/* 状态徽标：4px 小圆角、12px/500 字号，浅底深字（文本用 HIG 加深色保证小字对比度） */
+.s2a-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.s2a-tag--sm { height: 19px; padding: 0 6px; }
+.s2a-tag--ok { background: rgba(52, 199, 89, 0.13); color: #248a3d; }
+.s2a-tag--warn { background: rgba(255, 149, 0, 0.14); color: #c55300; }
+.s2a-tag--error { background: rgba(255, 59, 48, 0.12); color: #ff3b30; }
+.s2a-tag--off { background: rgba(142, 142, 147, 0.14); color: #6e6e73; }
+
+/* 账号列：名称 + 元信息两行 */
+.s2a-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s2a-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 调度列：iOS 风迷你开关（32×20），开＝Apple 绿、关＝系统灰轨；限流/临时小徽标跟在开关后 */
+.s2a-sw-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.s2a-sw {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(120, 120, 128, 0.32);
+  cursor: pointer;
+  transition: background 0.2s var(--ease-in-out, ease);
+}
+.s2a-sw::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s var(--ease-in-out, ease);
+}
+.s2a-sw:hover:not(:disabled) {
+  background: rgba(120, 120, 128, 0.44);
+}
+.s2a-sw--on {
+  background: #34c759;
+}
+.s2a-sw--on::after {
+  transform: translateX(12px);
+}
+.s2a-sw--on:hover:not(:disabled) {
+  background: #2db94e;
+}
+.s2a-sw:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.s2a-sw:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.45);
+  outline-offset: 1px;
+}
+
+/* 数字列：13px 半粗 + 等宽数字，按阈值着色；测试中蓝色转圈 */
+.s2a-num {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.s2a-unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: #909399;
+  margin-left: 1px;
+}
+.s2a-num--ok { color: #248a3d; }
+.s2a-num--mid { color: #c55300; }
+.s2a-num--bad { color: #ff3b30; }
+.s2a-none {
+  font-size: 13px;
+  color: #c7c7cc;
+}
+/* 测试中骨架：灰色横线 shimmer 扫光（无旋转），首 token 与总耗时两列同款 */
+.s2a-skeleton {
+  display: inline-block;
+  width: 56px;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06) 25%,
+    rgba(0, 0, 0, 0.12) 37%,
+    rgba(0, 0, 0, 0.06) 63%
+  );
+  background-size: 400% 100%;
+  animation: s2a-shimmer 1.4s ease infinite;
+}
+@keyframes s2a-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .s2a-skeleton {
+    animation: none;
+  }
+}
+
+/* 备注列 */
+.s2a-note {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.s2a-note--ok { color: #248a3d; }
+.s2a-note--err { color: #ff3b30; }
+
+/* 卡片底分页条：与卡片头汇总条同底色上下呼应；每页选择器 + 页码按钮（当前页蓝底白字） */
+.s2a-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 46px;
+  padding: 6px 20px;
+  background: #fafbfc;
+  border-top: 1px solid #ebeef5;
+}
+.s2a-pager-total {
+  font-size: 12px;
+  color: #909399;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.s2a-pager-total b {
+  font-weight: 600;
+  color: #303133;
+}
+.s2a-pager-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.s2a-pager-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #909399;
+  white-space: nowrap;
+}
+.s2a-pager-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: #f5f7fa;
+  color: #303133;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.s2a-pager-select:hover {
+  background: #eef1f6;
+}
+.s2a-pager-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.s2a-pg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #606266;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.s2a-pg-btn:hover:not(:disabled):not(.s2a-pg-cur) {
+  background: #f5f7fa;
+  color: #303133;
+}
+.s2a-pg-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.s2a-pg-cur {
+  background: #007aff;
+  color: #fff;
+  font-weight: 600;
+}
+.s2a-pg-ellipsis {
+  align-self: flex-end;
+  padding: 0 2px 4px;
+  font-size: 12px;
+  color: #909399;
+}
+/* 固定表格布局：列宽严格按 header 设定分配，备注列吸收剩余空间。
+   自动布局下备注列的不换行长文本会把整张表撑出容器、挤走操作列 */
+.v-data-table table {
+  table-layout: fixed;
+}
+/* 表头禁止折行，避免窄列标题被挤成两行 */
+.v-data-table__th {
+  white-space: nowrap;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #909399 !important;
+}
+/* 行分隔发丝线 + 悬浮浅灰；td 作为行首竖条的定位锚 */
+.v-data-table__td {
+  position: relative;
+  border-bottom: 1px solid #f2f3f5;
+}
+.v-data-table__td:first-child {
+  padding-left: 20px;
+}
+/* 表头首/末列同步内边距，与内容列对齐 */
+.v-data-table__th:first-child {
+  padding-left: 20px;
+}
+.v-data-table__th:last-child,
+.v-data-table__td:last-child {
+  padding-right: 20px;
+}
+.v-data-table__tr:hover > .v-data-table__td {
+  background: #f5f7fa !important;
+}
+.v-data-table__tr:last-child .v-data-table__td {
+  border-bottom: none;
+}
+/* 可排序列头悬停文字加深；排序指示样式见文件末尾非 scoped 块（h() 渲染的元素不带 data-v） */
+.v-data-table__th--sortable:hover {
+  color: #606266 !important;
+}
+
+/* 模型选择对话框 */
+.model-dialog {
+  padding: 20px 20px 16px;
+}
+.model-dialog-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+.model-dialog-sub {
+  margin-top: 2px;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-dialog-body {
+  margin-top: 12px;
+  min-height: 48px;
+}
+.model-list {
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  overflow: hidden;
+}
+.model-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* 行右键快捷菜单：透明全屏点消层 + 跟随光标的浮层卡片 */
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: transparent;
+}
+.ctx-menu {
+  position: fixed;
+  width: 184px;
+  padding: 4px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  box-shadow:
+    0 8px 28px rgb(0 0 0 / 0.14),
+    0 0 0 0.5px rgb(0 0 0 / 0.02);
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+}
+.ctx-item:hover:not(:disabled) {
+  background: hsl(var(--muted));
+}
+.ctx-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: hsl(var(--border));
+}
+
+/* 模型二级子菜单：与主菜单同质感，固定定位跟随触发项；
+   最大高度由脚本按视口钳制（ctxSubMaxH，320px 封顶），底部时整体往上长 */
+.ctx-sub {
+  position: fixed;
+  z-index: 2501;
+  width: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  box-shadow:
+    0 8px 28px rgb(0 0 0 / 0.14),
+    0 0 0 0.5px rgb(0 0 0 / 0.02);
+}
+.ctx-sub-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  text-align: left;
+}
+.ctx-sub-item:hover {
+  background: hsl(var(--muted));
+}
+/* 模型名超长截断，悬停靠 title 提示显示全名（同托盘子菜单） */
+.ctx-sub-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctx-sub-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+.ctx-item--open {
+  background: hsl(var(--muted));
+}
+.ctx-item-arrow {
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+}

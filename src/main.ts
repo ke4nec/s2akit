@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import "vuetify/styles";
 import "@mdi/font/css/materialdesignicons.css";
 import "./styles/apple.css";
+import "./styles/tables.css";
 import { createVuetify } from "vuetify";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App.vue";

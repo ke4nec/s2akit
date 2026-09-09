@@ -430,6 +430,11 @@ pub struct KeyBrief {
     pub status: String,
     #[serde(default)]
     pub group_id: Option<i64>,
+    /// 总额度（0 表示不限量）与已用额度，主页面额度列用
+    #[serde(default)]
+    pub quota: f64,
+    #[serde(default)]
+    pub quota_used: f64,
 }
 
 /// key 列表（自动翻页，最多 10 页）

@@ -1081,6 +1081,51 @@ async fn fetch_usage_selection(
     }))
 }
 
+/// Key 页用量列：全部 Key 各自的当天用量（拉取失败的单 key 跳过，不缓存）
+#[tauri::command]
+pub async fn list_keys_usage(app: AppHandle) -> AppResult<Vec<KeyUsageToday>> {
+    let state = app.state::<AppState>();
+    let http = state.http.clone();
+    let base = state.config_snapshot().base();
+    drop(state);
+    let keys = {
+        let http = http.clone();
+        let base = base.clone();
+        authed(&app, move |token| {
+            let http = http.clone();
+            let base = base.clone();
+            async move { api::list_keys(&http, &base, &token).await }
+        })
+        .await?
+    };
+    let mut out = Vec::with_capacity(keys.len());
+    for k in &keys {
+        let http = http.clone();
+        let base = base.clone();
+        let kid = k.id;
+        let stats = authed(&app, move |token| {
+            let http = http.clone();
+            let base = base.clone();
+            async move { api::key_usage_today(&http, &base, &token, kid).await }
+        })
+        .await;
+        let Ok(stats) = stats else {
+            continue;
+        };
+        out.push(KeyUsageToday {
+            key_id: k.id,
+            key_name: k.name.clone(),
+            requests: stats.total_requests,
+            input_tokens: stats.total_input_tokens,
+            output_tokens: stats.total_output_tokens,
+            cache_tokens: stats.total_cache_tokens,
+            total_tokens: stats.total_tokens,
+            cost: stats.total_cost,
+        });
+    }
+    Ok(out)
+}
+
 /// 记录/覆盖用量缓存（按所选 key 分键；无用量记录的 None 也缓存，同样受间隔约束）
 fn cache_usage(app: &AppHandle, key: Option<i64>, usage: Option<KeyUsageToday>) {
     *app.state::<AppState>().usage_cache.write().unwrap() = Some(crate::state::UsageCache {

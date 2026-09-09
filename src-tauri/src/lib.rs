@@ -156,6 +156,7 @@ pub fn run() {
             commands::get_usage_today,
             commands::set_usage_key,
             commands::get_usage_key,
+            commands::list_keys_usage,
             commands::set_menu_opacity,
             commands::menu_pong,
             commands::fit_menu,

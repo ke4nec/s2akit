@@ -1,38 +1,10 @@
 <script setup lang="ts">
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import {
-  getAccountModels,
-  handleErr,
-  refreshAccounts,
-  refreshGroups,
-  selectGroup,
-  setSchedulable,
-  store,
-  testAccount,
-} from "../store";
-import type { ModelBrief, TestResult } from "../types";
+import { invoke } from "@tauri-apps/api/core";
+import { handleErr, refreshGroups, store } from "../store";
+import type { KeyBrief, KeyUsageToday, ModelBrief, TestResult } from "../types";
 
-const groupItems = computed(() =>
-  store.groups.map((g) => ({
-    title: `${g.name} · ${g.platform}（${g.account_count ?? "?"}${g.status !== "active" ? "，停用" : ""}）`,
-    value: g.id,
-  })),
-);
-
-const selectedGroup = computed({
-  get: () => store.config?.group_id ?? null,
-  set: (v: number | null) => {
-    if (v != null) void selectGroup(v);
-  },
-});
-
-/** 胶囊悬浮提示显示的当前分组名（按钮文本固定 Group，对齐托盘菜单用词） */
-const currentGroupTitle = computed(
-  () => groupItems.value.find((g) => g.value === selectedGroup.value)?.title ?? "选择分组",
-);
-
-/// 表头排序指示（Apple 风，对齐 design/accounts.html）：
-/// 标题 + 成对 8×5px 小 chevron；当前排序列标题加深、方向对应的一枚点亮（上＝升序、下＝降序）
+/// 表头排序指示（Apple 风成对 chevron，与 AccountsView 同款）
 function headerChevron(up: boolean, lit: boolean) {
   return h(
     "svg",
@@ -67,7 +39,7 @@ const HeaderCell = (props: {
   ]);
 };
 
-/// 状态列排序权重：正常 → 停用 → 错误（升降序沿此语义）
+/// 状态列排序权重：启用 → 停用 → 其他（升降序沿此语义）
 function statusRank(s: string): number {
   if (s === "active") return 0;
   if (s === "inactive") return 1;
@@ -75,7 +47,7 @@ function statusRank(s: string): number {
 }
 
 const headers = [
-  { title: "账号", key: "name", sortable: true, width: 216 },
+  { title: "Key 名称", key: "name", sortable: true, width: 216 },
   {
     title: "状态",
     key: "status",
@@ -84,59 +56,93 @@ const headers = [
     // Vuetify 表头 sort 收到的是列的值（status 字符串），按语义权重排序
     sort: (a: string, b: string) => statusRank(a) - statusRank(b),
   },
-  { title: "调度", key: "schedulable", sortable: true, width: 132 },
+  { title: "调度", key: "enabled", sortable: true, width: 132 },
   { title: "首 token", key: "first_token", sortable: true, width: 104 },
   { title: "总耗时", key: "total", sortable: true, width: 96 },
-  {
-    title: "备注 / 最近错误",
-    key: "note",
-    sortable: true,
-    // 排序键为 rows 预计算的 0/1（无错误在前、有错误在后）
-    sort: (a: number, b: number) => a - b,
-  },
+  { title: "用量", key: "usageCost", sortable: true, width: 150 },
   { title: "操作", key: "actions", sortable: false, align: "end" as const, width: 150 },
 ];
 
-interface Row {
+interface KeyRow {
   id: number;
   name: string;
-  platform: string;
-  type: string;
+  secret: string;
   status: string;
-  schedulable: boolean;
-  rate_limited: boolean;
-  temp_unschedulable: boolean;
-  error_message: string;
+  enabled: boolean;
+  group: string;
   result?: TestResult;
   testing: boolean;
   first_token: number;
   total: number;
-  /** 备注列排序键：1＝有错误信息（测试错误或账号错误），0＝无 */
-  note: number;
+  /** 当日用量（后台静默填充）；用量列按费用排序，无数据排最后 */
+  usage?: KeyUsageToday;
+  usageCost: number;
 }
 
-const rows = computed<Row[]>(() =>
-  store.accounts.map((a) => {
-    const r = store.results[a.id];
-    const row: Row = {
-      ...a,
+const keys = ref<KeyBrief[]>([]);
+const keyResults = ref<Record<number, TestResult>>({});
+const keyTesting = ref(new Set<number>());
+const loadingKeys = ref(false);
+/** 各 Key 当日用量（后台静默填充，失败留空不断连） */
+const keyUsageMap = ref<Record<number, KeyUsageToday>>({});
+
+function groupNameOf(groupId: number | null): string {
+  if (groupId == null) return "未分组";
+  return store.groups.find((g) => g.id === groupId)?.name ?? "未分组";
+}
+
+const rows = computed<KeyRow[]>(() =>
+  keys.value.map((k) => {
+    const r = keyResults.value[k.id];
+    const row: KeyRow = {
+      id: k.id,
+      name: k.name,
+      secret: k.key,
+      status: k.status,
+      enabled: k.status === "active",
+      group: groupNameOf(k.group_id),
       result: r,
-      testing: store.testingIds.has(a.id),
-      // 排序键：无数据用极大值，保证升序时已测账号在前
+      testing: keyTesting.value.has(k.id),
+      // 排序键：无数据用极大值，保证升序时已测 Key 在前
       first_token: r?.first_token_ms ?? Number.MAX_SAFE_INTEGER,
       total: r?.total_ms ?? Number.MAX_SAFE_INTEGER,
-      note: 0,
+      usage: keyUsageMap.value[k.id],
+      usageCost: keyUsageMap.value[k.id]?.cost ?? Number.MAX_SAFE_INTEGER,
     };
-    row.note = noteText(row) ? 1 : 0;
     return row;
   }),
 );
 
-/// 分页状态：每页条数（默认 10，与窗口默认高度匹配）；页码由表格内部管理，经 #bottom 插槽交互
+/** 金额格式化：保留两位小数 */
+function fmtMoney(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+/** token 量格式化：K/M 紧凑显示 */
+function fmtTokens(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 1 : 2)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return `${n}`;
+}
+
+/** 用量副行：次数 · token 量 */
+function usageSub(u: KeyUsageToday): string {
+  return `${u.requests} 次 · ${fmtTokens(u.total_tokens)}`;
+}
+
+/** 用量列悬停明细（原主窗口右上角悬停同风格）：请求数、输入/输出/缓存、缓存率、均值与费用 */
+function usageTip(row: KeyRow): string {
+  const u = row.usage;
+  if (!u) return "";
+  const rate = u.total_tokens > 0 ? `${((u.cache_tokens / u.total_tokens) * 100).toFixed(1)}%` : "—";
+  const avg = u.requests > 0 ? fmtTokens(Math.round(u.total_tokens / u.requests)) : "—";
+  return `「${row.name}」今日 ${u.requests} 次请求 · 平均 ${avg} tok/次\n输入 ${fmtTokens(u.input_tokens)} · 输出 ${fmtTokens(u.output_tokens)} · 缓存 ${fmtTokens(u.cache_tokens)}\n缓存率 ${rate} · 共 ${fmtTokens(u.total_tokens)} · 费用 ${fmtMoney(u.cost)}`;
+}
+
+/// 页码窗口：页数不多时全量展示，页数多时收敛为 首页/尾页/当前±1，0 代表省略号
 const itemsPerPage = ref(10);
 const itemsPerPageOptions = [10, 20, 50, 100];
 
-/// 页码窗口：页数不多时全量展示，页数多时收敛为 首页/尾页/当前±1，0 代表省略号
 function pageItems(page: number, pageCount: number): number[] {
   if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1);
   const shown = new Set<number>([1, pageCount, page - 1, page, page + 1]);
@@ -150,30 +156,26 @@ function pageItems(page: number, pageCount: number): number[] {
   return out;
 }
 
-/// 行状态判定：错误 > 限流/临时 > 正常 > 停用，驱动行首竖条与汇总计数
-function rowState(item: Row): "ok" | "warn" | "error" | "off" {
-  if (item.status === "error") return "error";
-  if (item.rate_limited || item.temp_unschedulable) return "warn";
-  if (item.schedulable && item.status === "active") return "ok";
-  return "off";
+/// 行状态判定：启用 > 停用，驱动行首竖条与汇总计数
+function rowState(item: KeyRow): "ok" | "off" {
+  return item.enabled ? "ok" : "off";
 }
 
-/// 卡片头状态汇总：替代原整行底色的全局概览
+/// 卡片头状态汇总
 const stateCounts = computed(() => {
-  const c = { ok: 0, warn: 0, error: 0, off: 0 };
-  for (const r of rows.value) c[rowState(r)] += 1;
+  const c = { on: 0, off: 0 };
+  for (const r of rows.value) c[rowState(r) === "ok" ? "on" : "off"] += 1;
   return c;
 });
 
-/// 右键行弹出快捷菜单
-function rowProps({ item }: { item: Row }): Record<string, unknown> {
+/// 行右键弹出快捷菜单
+function rowProps({ item }: { item: KeyRow }): Record<string, unknown> {
   return { onContextmenu: (e: MouseEvent) => openCtxMenu(e, item) };
 }
 
-/// 状态徽标配色：正常绿 / 错误红 / 其余灰
+/// 状态徽标配色：启用绿 / 其余灰
 function statusBadgeClass(s: string): string {
   if (s === "active") return "s2a-tag--ok";
-  if (s === "error") return "s2a-tag--error";
   return "s2a-tag--off";
 }
 
@@ -193,41 +195,102 @@ function statusText(s: string): string {
   return s;
 }
 
-function noteText(row: Row): string {
-  const parts = [row.result?.error, row.error_message].filter(
-    (s): s is string => !!s && s.trim().length > 0,
-  );
-  return parts.join("｜");
+/** 当前用量统计源 Key（null = 汇总全部）：托盘菜单顶部展示，与托盘子菜单共用同一后端状态 */
+const usageKeyId = ref<number | null>(null);
+
+async function refreshKeys() {
+  loadingKeys.value = true;
+  try {
+    keys.value = await invoke<KeyBrief[]>("list_keys");
+    usageKeyId.value = await invoke<number | null>("get_usage_key").catch(() => null);
+    // 用量另起后台填充，不阻塞表格呈现
+    void refreshKeysUsage();
+  } catch (e) {
+    handleErr(e);
+  } finally {
+    loadingKeys.value = false;
+  }
 }
 
-function resultTooltip(r: TestResult): string {
-  const model = r.model || "默认模型";
-  const reply = r.content_preview || "（空）";
-  return `模型：${model}\n回复：${reply}`;
+async function refreshKeysUsage() {
+  try {
+    const list = await invoke<KeyUsageToday[]>("list_keys_usage");
+    const map: Record<number, KeyUsageToday> = {};
+    for (const u of list) map[u.key_id] = u;
+    keyUsageMap.value = map;
+  } catch {
+    // 静默，单元格保持 —
+  }
+}
+
+/** 指定默认 Key：切换托盘菜单顶部用量统计源，再点恢复汇总全部 */
+async function onPickUsage() {
+  const row = ctxRow.value;
+  closeCtxMenu();
+  if (!row || row.testing) return;
+  const toId = usageKeyId.value === row.id ? null : row.id;
+  try {
+    await invoke("set_usage_key", { keyId: toId });
+    usageKeyId.value = toId;
+  } catch (e) {
+    handleErr(e);
+  }
 }
 
 async function onRefresh() {
   await refreshGroups();
-  await refreshAccounts();
+  await refreshKeys();
 }
 
 function goSettings() {
   store.tab = "settings";
 }
 
-// ---- 单账号模型选择测试 ----
+async function testKey(id: number, model?: string) {
+  const k = keys.value.find((x) => x.id === id);
+  if (!k || keyTesting.value.has(id)) return;
+  keyTesting.value.add(id);
+  try {
+    const r = await invoke<TestResult>("tray_test_key", {
+      keyId: k.id,
+      keyName: k.name,
+      keySecret: k.key,
+      model: model ?? null,
+    });
+    keyResults.value = { ...keyResults.value, [id]: r };
+  } catch (e) {
+    handleErr(e);
+  } finally {
+    keyTesting.value.delete(id);
+  }
+}
+
+async function toggleKey(id: number) {
+  const k = keys.value.find((x) => x.id === id);
+  if (!k || keyTesting.value.has(id)) return;
+  try {
+    keys.value = await invoke<KeyBrief[]>("set_key_enabled", {
+      keyId: id,
+      enabled: k.status !== "active",
+    });
+  } catch (e) {
+    handleErr(e);
+  }
+}
+
+// ---- 单 Key 模型选择测试 ----
 const modelDialog = ref(false);
-const modelAccount = ref<Row | null>(null);
+const modelKey = ref<KeyRow | null>(null);
 const models = ref<ModelBrief[]>([]);
 const loadingModels = ref(false);
 
-async function openModelDialog(row: Row) {
-  modelAccount.value = row;
+async function openModelDialog(row: KeyRow) {
+  modelKey.value = row;
   models.value = [];
   modelDialog.value = true;
   loadingModels.value = true;
   try {
-    models.value = await getAccountModels(row.id);
+    models.value = await invoke<ModelBrief[]>("get_key_models", { keySecret: row.secret });
   } catch (e) {
     modelDialog.value = false;
     handleErr(e);
@@ -237,19 +300,19 @@ async function openModelDialog(row: Row) {
 }
 
 function testWithModel(model: ModelBrief) {
-  if (!modelAccount.value) return;
+  if (!modelKey.value) return;
   modelDialog.value = false;
-  void testAccount(modelAccount.value.id, model.id);
+  void testKey(modelKey.value.id, model.id);
 }
 
-// ---- 行右键快捷菜单：测试 / 选择模型测试 / 启用禁用 ----
+// ---- 行右键快捷菜单：选择模型测试 / 启用禁用 ----
 const ctxMenu = ref(false);
-const ctxRow = ref<Row | null>(null);
+const ctxRow = ref<KeyRow | null>(null);
 const ctxX = ref(0);
 const ctxY = ref(0);
 const ctxRef = ref<HTMLElement | null>(null);
 
-function openCtxMenu(e: MouseEvent, row: Row) {
+function openCtxMenu(e: MouseEvent, row: KeyRow) {
   e.preventDefault();
   e.stopPropagation();
   ctxRow.value = row;
@@ -281,7 +344,7 @@ function closeCtxMenu() {
 function ctxToggle() {
   const row = ctxRow.value;
   closeCtxMenu();
-  if (row && !row.testing) void setSchedulable(row.id, !row.schedulable);
+  if (row && !row.testing) void toggleKey(row.id);
 }
 
 // ---- 模型二级子菜单：与托盘级联子菜单同款交互（悬停意图延迟、贴边翻转）----
@@ -336,7 +399,7 @@ function showCtxSub(anchor: HTMLElement) {
   ctxSubMaxH.value = Math.max(120, Math.min(320, window.innerHeight - 16));
   ctxSubOpen.value = true;
   void nextTick(placeCtxSub);
-  // 模型列表按账号懒加载，列表为空时才请求（关闭菜单时清空）
+  // 模型列表按 Key 懒加载，列表为空时才请求（关闭菜单时清空）
   if (!ctxModels.value.length && !ctxModelsLoading.value) void loadCtxModels();
 }
 
@@ -345,7 +408,7 @@ async function loadCtxModels() {
   if (!row) return;
   ctxModelsLoading.value = true;
   try {
-    ctxModels.value = await getAccountModels(row.id);
+    ctxModels.value = await invoke<ModelBrief[]>("get_key_models", { keySecret: row.secret });
   } catch (e) {
     ctxSubOpen.value = false;
     handleErr(e);
@@ -376,14 +439,21 @@ function closeCtxSub() {
 function ctxTestWith(m: ModelBrief) {
   const row = ctxRow.value;
   closeCtxMenu();
-  if (row && !row.testing) void testAccount(row.id, m.id);
+  if (row && !row.testing) void testKey(row.id, m.id);
 }
 
 function onCtxKey(e: KeyboardEvent) {
   if (e.key === "Escape" && ctxMenu.value) closeCtxMenu();
 }
 
-onMounted(() => window.addEventListener("keydown", onCtxKey));
+onMounted(() => {
+  window.addEventListener("keydown", onCtxKey);
+  // 未登录只展示提示条（模板内 v-alert），不拉数据，避免未授权错误打扰
+  if (store.auth) {
+    void refreshGroups();
+    void refreshKeys();
+  }
+});
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onCtxKey);
   window.clearTimeout(subTimer);
@@ -411,56 +481,23 @@ onBeforeUnmount(() => {
     </v-alert>
 
     <div v-if="store.auth" class="table-card">
-      <!-- 状态汇总：左侧状态计数，右侧分组选择 + 刷新 -->
+      <!-- 状态汇总：左侧启用/停用计数，右侧刷新 -->
       <div class="s2a-summary">
         <span class="s2a-sum">
-          <i class="s2a-sum-dot s2a-dot--ok" aria-hidden="true"></i>正常 <b>{{ stateCounts.ok }}</b>
-        </span>
-        <span class="s2a-sum">
-          <i class="s2a-sum-dot s2a-dot--warn" aria-hidden="true"></i>限流 / 临时 <b>{{ stateCounts.warn }}</b>
-        </span>
-        <span class="s2a-sum">
-          <i class="s2a-sum-dot s2a-dot--error" aria-hidden="true"></i>错误 <b>{{ stateCounts.error }}</b>
+          <i class="s2a-sum-dot s2a-dot--ok" aria-hidden="true"></i>正常 <b>{{ stateCounts.on }}</b>
         </span>
         <span class="s2a-sum">
           <i class="s2a-sum-dot s2a-dot--off" aria-hidden="true"></i>停用 <b>{{ stateCounts.off }}</b>
         </span>
         <div class="s2a-summary-tools">
-          <v-menu scroll-strategy="close">
-            <template #activator="{ props: menuProps }">
-              <button v-bind="menuProps" type="button" class="group-pop">
-                <span class="group-pop-text" :title="currentGroupTitle">Group</span>
-                <v-progress-circular
-                  v-if="store.loadingGroups"
-                  indeterminate
-                  size="12"
-                  width="1.5"
-                  class="group-pop-wait"
-                />
-                <v-icon v-else icon="mdi-chevron-down" size="15" class="group-pop-chevron" />
-              </button>
-            </template>
-            <v-list density="compact" class="group-list" max-height="360">
-              <v-list-item v-for="g in groupItems" :key="g.value" @click="selectedGroup = g.value">
-                <template #prepend>
-                  <v-icon
-                    :icon="g.value === selectedGroup ? 'mdi-check' : 'mdi-circle-medium'"
-                    :color="g.value === selectedGroup ? 'primary' : 'grey'"
-                    size="15"
-                  />
-                </template>
-                <v-list-item-title>{{ g.title }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
-          </v-menu>
-          <v-tooltip text="刷新分组与账号" content-class="apple-tip">
+          <v-tooltip text="刷新 Key 列表" content-class="apple-tip">
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
                 icon="mdi-refresh"
                 variant="text"
                 size="small"
-                :loading="store.loadingAccounts"
+                :loading="loadingKeys"
                 @click="onRefresh"
               />
             </template>
@@ -470,29 +507,40 @@ onBeforeUnmount(() => {
       <v-data-table
         :headers="headers"
         :items="rows"
-        :loading="store.loadingAccounts"
+        :loading="loadingKeys"
         :row-props="rowProps"
         v-model:items-per-page="itemsPerPage"
         density="compact"
         hover
-        no-data-text="暂无账号（请选择分组）"
+        no-data-text="暂无 API Key"
       >
         <!-- 表头：Apple 风成对 chevron 排序指示（自定义插槽替换默认图标，th 点击排序仍由 Vuetify 处理）；
              函数组件未声明 props，绑定需用 camelCase :sortBy，kebab 不会归一化 -->
         <template #header.name="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
         <template #header.status="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
-        <template #header.schedulable="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
+        <template #header.enabled="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
         <template #header.first_token="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
         <template #header.total="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
-        <template #header.note="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
+        <template #header.usageCost="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
 
         <template #item.name="{ item }">
           <v-tooltip :disabled="!item.result" max-width="420" content-class="apple-tip">
             <template #activator="{ props: tipProps }">
               <div v-bind="tipProps" style="min-width: 0">
                 <span class="s2a-bar" :class="`s2a-bar--${rowState(item)}`" aria-hidden="true"></span>
-                <div class="s2a-name">{{ item.name }}</div>
-                <div class="s2a-meta">#{{ item.id }} · {{ item.platform }}/{{ item.type }}</div>
+                <div class="s2a-name">
+                  {{ item.name }}
+                  <v-icon
+                    v-if="usageKeyId === item.id"
+                    icon="mdi-chart-areaspline"
+                    size="11"
+                    color="primary"
+                    class="ml-1"
+                    style="vertical-align: baseline"
+                    title="正在查看该 Key 额度"
+                  />
+                </div>
+                <div class="s2a-meta">#{{ item.id }} · {{ item.group }}</div>
               </div>
             </template>
             <div v-if="item.result">
@@ -517,20 +565,18 @@ onBeforeUnmount(() => {
           <span class="s2a-tag" :class="statusBadgeClass(item.status)">{{ statusText(item.status) }}</span>
         </template>
 
-        <template #item.schedulable="{ item }">
+        <template #item.enabled="{ item }">
           <div class="s2a-sw-wrap">
             <button
               type="button"
               class="s2a-sw"
-              :class="{ 's2a-sw--on': item.schedulable }"
+              :class="{ 's2a-sw--on': item.enabled }"
               role="switch"
-              :aria-checked="item.schedulable"
-              :aria-label="item.schedulable ? '禁用该账号' : '启用该账号'"
+              :aria-checked="item.enabled"
+              :aria-label="item.enabled ? '禁用该 Key' : '启用该 Key'"
               :disabled="item.testing"
-              @click="setSchedulable(item.id, !item.schedulable)"
+              @click="toggleKey(item.id)"
             ></button>
-            <span v-if="item.rate_limited" class="s2a-tag s2a-tag--warn s2a-tag--sm">限流</span>
-            <span v-if="item.temp_unschedulable" class="s2a-tag s2a-tag--warn s2a-tag--sm">临时</span>
           </div>
         </template>
 
@@ -554,22 +600,13 @@ onBeforeUnmount(() => {
           <span v-else class="s2a-none">—</span>
         </template>
 
-        <template #item.note="{ item }">
-          <v-tooltip v-if="noteText(item)" :text="noteText(item)" location="top" content-class="apple-tip">
+        <template #item.usageCost="{ item }">
+          <v-tooltip v-if="item.usage" :text="usageTip(item)" content-class="apple-tip">
             <template #activator="{ props }">
-              <span v-bind="props" class="s2a-note s2a-note--err">
-                {{ noteText(item) }}
-              </span>
-            </template>
-          </v-tooltip>
-          <v-tooltip
-            v-else-if="item.result?.success"
-            :text="resultTooltip(item.result)"
-            location="top"
-            content-class="apple-tip"
-          >
-            <template #activator="{ props }">
-              <span v-bind="props" class="s2a-note s2a-note--ok">✓ 正常</span>
+              <div v-bind="props">
+                <div class="s2a-name">今日 {{ fmtMoney(item.usage.cost) }}</div>
+                <div class="s2a-meta">{{ usageSub(item.usage) }}</div>
+              </div>
             </template>
           </v-tooltip>
           <span v-else class="s2a-none">—</span>
@@ -581,7 +618,7 @@ onBeforeUnmount(() => {
             variant="text"
             color="primary"
             :disabled="item.testing"
-            @click="testAccount(item.id)"
+            @click="testKey(item.id)"
           >
             测试
           </v-btn>
@@ -601,7 +638,7 @@ onBeforeUnmount(() => {
           </v-tooltip>
         </template>
 
-        <!-- 卡片底分页条：替换默认 footer，样式对齐 design/accounts.html -->
+        <!-- 卡片底分页条：替换默认 footer -->
         <template #bottom="{
           itemsLength,
           itemsPerPage: perPage,
@@ -613,7 +650,7 @@ onBeforeUnmount(() => {
           nextPage,
         }">
           <div v-if="itemsLength > 0" class="s2a-pager">
-            <span class="s2a-pager-total">共 <b>{{ itemsLength }}</b> 个账号</span>
+            <span class="s2a-pager-total">共 <b>{{ itemsLength }}</b> 个 Key</span>
             <div class="s2a-pager-right">
               <span class="s2a-pager-size">
                 <span>每页</span>
@@ -652,8 +689,8 @@ onBeforeUnmount(() => {
                   </button>
                 </template>
                 <button
-                  class="s2a-pg-btn"
                   type="button"
+                  class="s2a-pg-btn"
                   :disabled="page >= pageCount"
                   title="下一页"
                   @click="nextPage"
@@ -671,12 +708,12 @@ onBeforeUnmount(() => {
       <v-card rounded="xl" class="model-dialog">
         <div class="model-dialog-head">
           <div class="model-dialog-title">选择测试模型</div>
-          <div v-if="modelAccount" class="model-dialog-sub">{{ modelAccount.name }}</div>
+          <div v-if="modelKey" class="model-dialog-sub">{{ modelKey.name }}</div>
         </div>
         <v-progress-linear v-if="loadingModels" indeterminate color="primary" />
         <div class="model-dialog-body">
           <div v-if="!loadingModels && !models.length" class="text-body-2 text-medium-emphasis">
-            该账号没有可用的模型列表
+            该 Key 没有可用的模型列表
           </div>
           <v-list v-else-if="!loadingModels" density="compact" max-height="360" class="py-0 model-list">
             <v-list-item
@@ -700,8 +737,8 @@ onBeforeUnmount(() => {
 
     <!-- 行右键快捷菜单：跟随光标，点消（与托盘菜单一致，右键空白处收起）。
          必须 Teleport 到 body：App.vue 的 animate-apple-fade-in 动画(fill both)会永久留下
-         translateY(0) 变换，任何非 none 的 transform 都会把后代 fixed 定位锚到该祖先
-         （实测菜单整体偏移 +24/+72），传送出层后 fixed 才相对视口 -->
+         translateY(0) 变换，任何非 none 的 transform 都会把后代 fixed 定位锚到该祖先，
+         传送出层后 fixed 才相对视口 -->
     <Teleport to="body">
       <div
         v-if="ctxMenu && ctxRow"
@@ -716,6 +753,11 @@ onBeforeUnmount(() => {
         @click.stop
         @contextmenu.stop.prevent
       >
+        <button type="button" class="ctx-item" :disabled="ctxRow.testing" @click="onPickUsage">
+          <v-icon icon="mdi-chart-areaspline" size="16" />
+          <span>{{ usageKeyId === ctxRow.id ? "✓ 正在查看该 Key" : "查看该 Key 额度" }}</span>
+        </button>
+        <div class="ctx-sep" />
         <!-- 模型二级子菜单：悬停（约 220ms 意图延迟）或点击展开，与托盘级联子菜单同款 -->
         <button
           type="button"
@@ -732,8 +774,8 @@ onBeforeUnmount(() => {
         </button>
         <div class="ctx-sep" />
         <button type="button" class="ctx-item" :disabled="ctxRow.testing" @click="ctxToggle">
-          <v-icon :icon="ctxRow.schedulable ? 'mdi-circle-outline' : 'mdi-circle'" size="16" />
-          <span>{{ ctxRow.schedulable ? "禁用该账号" : "启用该账号" }}</span>
+          <v-icon :icon="ctxRow.enabled ? 'mdi-circle-outline' : 'mdi-circle'" size="16" />
+          <span>{{ ctxRow.enabled ? "禁用该 Key" : "启用该 Key" }}</span>
         </button>
       </div>
 
@@ -752,7 +794,7 @@ onBeforeUnmount(() => {
           <v-progress-circular indeterminate size="14" width="2" />
           正在获取模型列表…
         </div>
-        <div v-else-if="!ctxModels.length" class="ctx-sub-hint">该账号没有可用的模型列表</div>
+        <div v-else-if="!ctxModels.length" class="ctx-sub-hint">该 Key 没有可用的模型列表</div>
         <template v-else>
           <button
             v-for="m in ctxModels"
@@ -771,75 +813,4 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style scoped>
-/* 分组选择胶囊：macOS 工具栏弹出菜单风格，28px 高、灰底圆角、悬浮加深；
-   与顶栏分段导航（同色系容器）视觉统一 */
-.group-pop {
-  flex: none;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  padding: 0 7px 0 11px;
-  border: none;
-  border-radius: 7px;
-  background: rgba(118, 118, 128, 0.12);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: rgba(0, 0, 0, 0.78);
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s var(--ease-in-out, ease);
-}
-.group-pop:hover {
-  background: rgba(118, 118, 128, 0.2);
-}
-.group-pop:focus-visible {
-  outline: 2px solid rgba(0, 122, 255, 0.45);
-}
-.group-pop-text {
-  min-width: 0;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.group-pop-chevron,
-.group-pop-wait {
-  color: rgba(0, 0, 0, 0.4);
-}
-/* 分组下拉列表：限高滚动，其余沿用 Vuetify 菜单默认质感 */
-.group-list {
-  max-height: 360px;
-  overflow-y: auto;
-}
 
-</style>
-
-<style>
-/* 表头排序指示（Apple 风成对 chevron）：HeaderCell 为函数组件，元素经 h() 渲染、
-   不带 scoped 的 data-v 属性，样式须放非 scoped 块才能命中；
-   类名沿用 s2a- 前缀全局命名约定（同 apple.css 的 .s2a-flag） */
-.s2a-th--active {
-  color: #606266;
-}
-.s2a-si {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 1px;
-  margin-left: 4px;
-  vertical-align: middle;
-}
-.s2a-si svg {
-  display: block;
-  width: 8px;
-  height: 5px;
-  color: #c7c7cc;
-}
-.s2a-si svg.s2a-si-on {
-  color: #6e6e73;
-}
-</style>
