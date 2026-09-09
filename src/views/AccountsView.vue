@@ -438,7 +438,7 @@ onBeforeUnmount(() => {
                   size="15"
                 />
               </template>
-              <v-list-item-title class="text-body-2">{{ g.title }}</v-list-item-title>
+              <v-list-item-title>{{ g.title }}</v-list-item-title>
             </v-list-item>
           </v-list>
         </v-menu>
@@ -629,7 +629,7 @@ onBeforeUnmount(() => {
                       <v-icon icon="mdi-menu-down" size="12" />
                     </button>
                   </template>
-                  <v-list density="compact" class="py-0">
+                  <v-list density="compact">
                     <v-list-item
                       v-for="n in itemsPerPageOptions"
                       :key="n"

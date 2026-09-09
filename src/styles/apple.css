@@ -144,6 +144,33 @@ body,
   border-radius: 8px;
 }
 
+/* 下拉弹出菜单（主页面分组选择、每页条数等 v-menu 弹层）：
+   与托盘菜单同一套 Apple 规格——白底发丝边框、10px 圆角浅投影、紧凑行。
+   弹层传送在 body 级 overlay 容器，组件 scoped 样式够不到，必须在这里全局覆盖；
+   托盘窗口的 v-list 不在 v-menu 内，不受影响 */
+.v-menu .v-list {
+  background: #fff;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+}
+.v-menu .v-list-item {
+  --v-list-item-one-line-height: 30px;
+  --v-list-prepend-gap: 8px;
+  min-height: 30px;
+  border-radius: 7px;
+}
+.v-menu .v-list-item .v-list-item-title {
+  font-size: 13px;
+  line-height: 1.4;
+  color: hsl(var(--foreground));
+}
+/* 悬浮/涟漪高亮随行圆角 */
+.v-menu .v-list-item__overlay {
+  border-radius: 7px;
+}
+
 /* 键盘焦点环 */
 :focus-visible {
   outline: 2px solid hsl(var(--ring) / 0.55);
