@@ -410,55 +410,8 @@ onBeforeUnmount(() => {
       </template>
     </v-alert>
 
-    <!-- 工具栏传送到顶部应用栏（App.vue 的 .appbar-tools）：与品牌、导航、登录状态合并为一行。
-         分组选择做成 macOS 工具栏弹出菜单风格的胶囊，紧凑安静。
-         v-window 非活跃项仅隐藏不卸载，常驻 Teleport 会在设置页泄漏，故仅账号页挂载 -->
-    <Teleport v-else-if="store.tab === 'accounts'" defer to=".appbar-tools">
-      <div class="d-flex align-center ga-2" style="min-width: 0">
-        <v-menu scroll-strategy="close">
-          <template #activator="{ props: menuProps }">
-            <button v-bind="menuProps" type="button" class="group-pop">
-              <span class="group-pop-text" :title="currentGroupTitle">{{ currentGroupTitle }}</span>
-              <v-progress-circular
-                v-if="store.loadingGroups"
-                indeterminate
-                size="12"
-                width="1.5"
-                class="group-pop-wait"
-              />
-              <v-icon v-else icon="mdi-chevron-down" size="15" class="group-pop-chevron" />
-            </button>
-          </template>
-          <v-list density="compact" class="group-list" max-height="360">
-            <v-list-item v-for="g in groupItems" :key="g.value" @click="selectedGroup = g.value">
-              <template #prepend>
-                <v-icon
-                  :icon="g.value === selectedGroup ? 'mdi-check' : 'mdi-circle-medium'"
-                  :color="g.value === selectedGroup ? 'primary' : 'grey'"
-                  size="15"
-                />
-              </template>
-              <v-list-item-title>{{ g.title }}</v-list-item-title>
-            </v-list-item>
-          </v-list>
-        </v-menu>
-        <v-tooltip text="刷新分组与账号">
-          <template #activator="{ props }">
-            <v-btn
-              v-bind="props"
-              icon="mdi-refresh"
-              variant="text"
-              size="small"
-              :loading="store.loadingAccounts"
-              @click="onRefresh"
-            />
-          </template>
-        </v-tooltip>
-      </div>
-    </Teleport>
-
     <div v-if="store.auth" class="table-card">
-      <!-- 状态汇总：与行首竖条同一套判定；右键提示提升快捷菜单可发现性 -->
+      <!-- 状态汇总：左侧状态计数，右侧分组选择 + 刷新 -->
       <div class="s2a-summary">
         <span class="s2a-sum">
           <i class="s2a-sum-dot s2a-dot--ok" aria-hidden="true"></i>正常 <b>{{ stateCounts.ok }}</b>
@@ -472,6 +425,47 @@ onBeforeUnmount(() => {
         <span class="s2a-sum">
           <i class="s2a-sum-dot s2a-dot--off" aria-hidden="true"></i>停用 <b>{{ stateCounts.off }}</b>
         </span>
+        <div class="s2a-summary-tools">
+          <v-menu scroll-strategy="close">
+            <template #activator="{ props: menuProps }">
+              <button v-bind="menuProps" type="button" class="group-pop">
+                <span class="group-pop-text" :title="currentGroupTitle">{{ currentGroupTitle }}</span>
+                <v-progress-circular
+                  v-if="store.loadingGroups"
+                  indeterminate
+                  size="12"
+                  width="1.5"
+                  class="group-pop-wait"
+                />
+                <v-icon v-else icon="mdi-chevron-down" size="15" class="group-pop-chevron" />
+              </button>
+            </template>
+            <v-list density="compact" class="group-list" max-height="360">
+              <v-list-item v-for="g in groupItems" :key="g.value" @click="selectedGroup = g.value">
+                <template #prepend>
+                  <v-icon
+                    :icon="g.value === selectedGroup ? 'mdi-check' : 'mdi-circle-medium'"
+                    :color="g.value === selectedGroup ? 'primary' : 'grey'"
+                    size="15"
+                  />
+                </template>
+                <v-list-item-title>{{ g.title }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
+          <v-tooltip text="刷新分组与账号" content-class="apple-tip">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-refresh"
+                variant="text"
+                size="small"
+                :loading="store.loadingAccounts"
+                @click="onRefresh"
+              />
+            </template>
+          </v-tooltip>
+        </div>
       </div>
       <v-data-table
         :headers="headers"
@@ -493,7 +487,7 @@ onBeforeUnmount(() => {
         <template #header.note="{ column, sortBy }"><HeaderCell :column="column" :sortBy="sortBy" /></template>
 
         <template #item.name="{ item }">
-          <v-tooltip :disabled="!item.result" max-width="420">
+          <v-tooltip :disabled="!item.result" max-width="420" content-class="apple-tip">
             <template #activator="{ props: tipProps }">
               <div v-bind="tipProps" style="min-width: 0">
                 <span class="s2a-bar" :class="`s2a-bar--${rowState(item)}`" aria-hidden="true"></span>
@@ -561,7 +555,7 @@ onBeforeUnmount(() => {
         </template>
 
         <template #item.note="{ item }">
-          <v-tooltip v-if="noteText(item)" :text="noteText(item)" location="top">
+          <v-tooltip v-if="noteText(item)" :text="noteText(item)" location="top" content-class="apple-tip">
             <template #activator="{ props }">
               <span v-bind="props" class="s2a-note s2a-note--err">
                 {{ noteText(item) }}
@@ -572,6 +566,7 @@ onBeforeUnmount(() => {
             v-else-if="item.result?.success"
             :text="resultTooltip(item.result)"
             location="top"
+            content-class="apple-tip"
           >
             <template #activator="{ props }">
               <span v-bind="props" class="s2a-note s2a-note--ok">✓ 正常</span>
@@ -590,7 +585,7 @@ onBeforeUnmount(() => {
           >
             测试
           </v-btn>
-          <v-tooltip text="选择模型测试">
+          <v-tooltip text="选择模型测试" content-class="apple-tip">
             <template #activator="{ props }">
               <v-btn
                 v-bind="props"
@@ -831,7 +826,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.03);
 }
 
-/* 卡片头状态汇总 */
+/* 卡片头状态汇总：左侧状态计数，右侧分组选择 + 刷新 */
 .s2a-summary {
   display: flex;
   align-items: center;
@@ -840,6 +835,13 @@ onBeforeUnmount(() => {
   padding: 6px 20px;
   background: #fafbfc;
   border-bottom: 1px solid #ebeef5;
+}
+.s2a-summary-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .s2a-sum {
   display: inline-flex;

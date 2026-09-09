@@ -159,9 +159,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <v-spacer data-tauri-drag-region />
-      <!-- 账号页工具栏传送目标：AccountsView 把分组选择/刷新渲染到此处，与导航合并为一行 -->
-      <div class="appbar-tools" data-tauri-drag-region></div>
-      <v-tooltip :text="authTip" :disabled="!authTip" location="bottom">
+      <v-tooltip :text="authTip" :disabled="!authTip" location="bottom" content-class="apple-tip">
         <template #activator="{ props }">
           <div class="auth-status" v-bind="props" data-tauri-drag-region @mouseenter="onAuthEnter">
             <span class="status-dot" :class="store.auth ? 'status-dot--on' : 'status-dot--off'" />
@@ -365,20 +363,6 @@ onBeforeUnmount(() => {
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.1),
     0 0 0 0.5px rgba(0, 0, 0, 0.04);
-}
-
-/* 顶栏工具栏区：接收 AccountsView 传送进来的分组选择/测试按钮；
-   空态（设置页或未登录）不占视觉空间 */
-.appbar-tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  margin-right: 12px;
-}
-.appbar-tools:empty {
-  display: none;
-  margin-right: 0;
 }
 
 /* 登录状态：状态点 + 邮箱，替代原 v-chip */
