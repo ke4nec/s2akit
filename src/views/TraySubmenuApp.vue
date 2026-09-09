@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
-import type { AccountBrief, KeyBrief, ModelBrief, TestResult } from "../types";
+import type { AccountBrief, AppConfig, KeyBrief, ModelBrief, TestResult } from "../types";
 
 /**
  * 级联子菜单独立窗口：账号操作 / Key 操作 / 分组选择三种内容，共用窗口弹出，
@@ -51,6 +51,17 @@ function scheduleFit() {
   window.setTimeout(() => void fit(), 160);
 }
 
+/** 悬停提示透明度跟随菜单不透明度设置（×85%），每次打开子菜单刷新一次 */
+async function applyTipAlpha() {
+  try {
+    const cfg = await invoke<AppConfig>("get_config");
+    const alpha = Math.min(1, Math.max(0, cfg.menu_opacity * 0.85));
+    document.documentElement.style.setProperty("--tip-alpha", alpha.toFixed(3));
+  } catch {
+    // 忽略，保持默认
+  }
+}
+
 async function hide() {
   try {
     await invoke("hide_submenu");
@@ -96,6 +107,7 @@ const usageSelected = ref(false);
 async function loadKey(id: number) {
   closeTip();
   window.clearTimeout(hoverModelsTimer);
+  void applyTipAlpha();
   mode.value = "key";
   usageSelected.value = false;
   try {
@@ -268,6 +280,7 @@ async function onPickGroup(id: number) {
 async function loadAccount(id: number) {
   closeTip();
   window.clearTimeout(keyHoverModelsTimer);
+  void applyTipAlpha();
   mode.value = "account";
   pendingId.value = id;
   modelsOpen.value = false;
@@ -682,12 +695,29 @@ onBeforeUnmount(() => {
 }
 .submenu-card {
   position: relative;
+  /* macOS 式弹出：淡入 + 轻微放大（v-if 重建时重播，切换内容也有跟手感） */
+  animation: sub-in 0.12s ease-out;
   background: rgba(246, 246, 248, 0.72);
   max-height: 100vh;
   border: 1px solid rgba(0, 0, 0, 0.08);
   /* 8px 与 DWM 窗口圆角一致，与主菜单严丝合缝 */
   border-radius: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+@keyframes sub-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .submenu-card {
+    animation: none;
+  }
 }
 /* 加载条悬浮顶部不占布局，避免窗口高度抖动 */
 .submenu-card > .v-progress-linear {

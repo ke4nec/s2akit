@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { AccountBrief, KeyBrief, KeyUsageToday, TestResult } from "../types";
+import type { AccountBrief, AppConfig, KeyBrief, KeyUsageToday, TestResult } from "../types";
 
 const accounts = ref<AccountBrief[]>([]);
 const loading = ref(false);
@@ -83,6 +83,17 @@ async function fitToContent(force = false) {
 }
 function scheduleFit(force = false) {
   requestAnimationFrame(() => void fitToContent(force));
+}
+
+/** 悬停提示透明度跟随菜单不透明度设置（×85%），读配置即时生效 */
+async function applyTipAlpha() {
+  try {
+    const cfg = await invoke<AppConfig>("get_config");
+    const alpha = Math.min(1, Math.max(0, cfg.menu_opacity * 0.85));
+    document.documentElement.style.setProperty("--tip-alpha", alpha.toFixed(3));
+  } catch {
+    // 忽略，保持默认
+  }
 }
 
 /** 顶部组|key 切换：只换列表内容，高度下限兜底（短了留白、长了内滚） */
@@ -207,11 +218,13 @@ function cancelClose() {
   }
 }
 
-/** 悬停意图延迟：鼠标扫过账号列表时不立即弹子菜单，停留片刻才展开，避免闪烁。
- *  取 100ms：Windows MenuShowDelay 默认 400ms 公认拖沓，调优共识 100ms
- *  “跟手又不跳”（0 则扫过即弹太神经质）；macOS 原生子菜单更是悬停近乎即开，
- *  防抖主要靠收起侧的跨窗口桥接而非拉长展开延迟 */
+/** 对齐 macOS 原生菜单的三段式动效：
+ * 展开 100ms（悬停意图，扫过不弹；Windows 调优共识值，macOS 近乎即开）；
+ * 行间切换 200ms（安全三角的计时器近似：子菜单已展开时划到别行不立刻抢走，
+ *  落进子菜单即取消，斜滑基本不断连）；
+ * 收起 180ms 跨窗口桥接；关闭保持即时（原子菜单点选/点消不拖泥带水） */
 const HOVER_OPEN_DELAY = 100;
+const SWITCH_DELAY = 200;
 let openTimer: number | null = null;
 let pendingFire: (() => void) | null = null;
 
@@ -223,8 +236,18 @@ function cancelOpen() {
   pendingFire = null;
 }
 
-/** 悬停意图：停留 HOVER_OPEN_DELAY 才执行，快速扫过不弹，避免窗口反复横跳 */
-function scheduleOpen(fire: () => void) {
+/** 是否切到另一路子菜单（含同类不同行），是则走切换延迟 */
+function isSwitchTarget(kind: "account" | "key" | "groups", id: number | null = null): boolean {
+  if (kind !== "account" && expandedId.value !== null) return true;
+  if (kind !== "key" && keysOpenId.value !== null) return true;
+  if (kind !== "groups" && groupsOpen.value) return true;
+  if (kind === "account" && expandedId.value !== null && expandedId.value !== id) return true;
+  if (kind === "key" && keysOpenId.value !== null && keysOpenId.value !== id) return true;
+  return false;
+}
+
+/** 悬停意图：停留才执行，快速扫过不弹，避免窗口反复横跳 */
+function scheduleOpen(fire: () => void, delay = HOVER_OPEN_DELAY) {
   cancelOpen();
   pendingFire = fire;
   openTimer = window.setTimeout(() => {
@@ -232,7 +255,7 @@ function scheduleOpen(fire: () => void) {
     const f = pendingFire;
     pendingFire = null;
     f?.();
-  }, HOVER_OPEN_DELAY);
+  }, delay);
 }
 
 /** 立即展开子菜单窗口（点击走即时路径，不经过悬停延迟） */
@@ -284,7 +307,7 @@ function onRowEnter(a: AccountBrief, e: Event) {
   }
   const anchor = e.currentTarget as HTMLElement | null;
   const rowTop = anchor ? rowTopOf(anchor) : 96;
-  scheduleOpen(() => openSubmenu("account", a.id, rowTop));
+  scheduleOpen(() => openSubmenu("account", a.id, rowTop), isSwitchTarget("account", a.id) ? SWITCH_DELAY : HOVER_OPEN_DELAY);
 }
 
 function onRowLeave() {
@@ -313,7 +336,7 @@ function onGroupRowEnter(e: Event) {
   }
   const anchor = e.currentTarget as HTMLElement | null;
   const rowTop = anchor ? rowTopOf(anchor) : 32;
-  scheduleOpen(() => openGroupsSubmenu(rowTop));
+  scheduleOpen(() => openGroupsSubmenu(rowTop), isSwitchTarget("groups") ? SWITCH_DELAY : HOVER_OPEN_DELAY);
 }
 
 function toggleGroupRow(e: Event) {
@@ -336,7 +359,7 @@ function onKeyEnter(k: KeyBrief, e: Event) {
   }
   const anchor = e.currentTarget as HTMLElement | null;
   const rowTop = anchor ? rowTopOf(anchor) : 96;
-  scheduleOpen(() => openSubmenu("key", k.id, rowTop));
+  scheduleOpen(() => openSubmenu("key", k.id, rowTop), isSwitchTarget("key", k.id) ? SWITCH_DELAY : HOVER_OPEN_DELAY);
 }
 
 function toggleKey(k: KeyBrief, e: Event) {
@@ -384,19 +407,29 @@ onMounted(async () => {
   unlistens.push(
     await listen("tray-menu-shown", () => {
       void invoke("menu_pong");
+      void applyTipAlpha();
       // 每次弹出都回到账号列表：Rust 侧隐藏（再右键收起/失焦）不经过前端 hide()，
       // 子菜单展开态会残留，重开时收起（原生菜单行为）
       closeSubmenu();
+      // 原生菜单式淡入：窗口是 show/hide 复用不重挂载，这里手动重播
+      const cardEl = document.querySelector<HTMLElement>(".tray-menu-card");
+      if (cardEl) {
+        cardEl.classList.remove("menu-enter");
+        void cardEl.offsetWidth;
+        cardEl.classList.add("menu-enter");
+      }
       // 每次弹出后端都会先按估算高度摆放窗口，需强制按当前内容重新贴合定位
       scheduleFit(true);
       void reload();
     })
   );
-  // 子菜单窗口悬停状态：滑入取消收起，滑出延迟收起（跨窗口不断连）
+  // 子菜单窗口悬停状态：滑入取消收起（含待切换，安全三角的落点侧），滑出延迟收起
   unlistens.push(
     await listen<{ inside: boolean }>("submenu-hover", (e) => {
-      if (e.payload.inside) cancelClose();
-      else scheduleClose();
+      if (e.payload.inside) {
+        cancelClose();
+        cancelOpen();
+      } else scheduleClose();
     })
   );
   // 子菜单窗口发起的测速：行内转圈与结果回填（账号/key 分账存放，id 可能重叠）
@@ -459,6 +492,7 @@ onMounted(async () => {
   if (card) ro.observe(card);
   // 页面能执行到这里即证明加载成功，告知后端菜单存活
   void invoke("menu_pong");
+  void applyTipAlpha();
   void reload();
 });
 onBeforeUnmount(() => {
@@ -755,6 +789,23 @@ html.s2a-tray-doc body:focus-visible {
   /* 8px 与 DWM 窗口圆角（DWMWCP_ROUND）一致，窗口与卡片边缘严丝合缝 */
   border-radius: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+/* 主菜单弹出淡入（macOS 菜单式；关闭保持即时，不断连） */
+.menu-enter {
+  animation: tray-in 0.12s ease-out;
+}
+@keyframes tray-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-enter {
+    animation: none;
+  }
 }
 /* 子菜单指示箭头：常态弱化，行展开/悬浮时加深 */
 .submenu-hint {

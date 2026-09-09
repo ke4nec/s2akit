@@ -93,9 +93,10 @@ body,
 
 /* ---------- 悬停提示统一皮肤 ---------- */
 /* 托盘菜单体系（主菜单 / 级联子菜单）的悬停提示：深色苹果风气泡，
-   content-class="apple-tip" 挂载生效；pre-line 让 \n 换行 */
+   content-class="apple-tip" 挂载生效；pre-line 让 \n 换行。
+   背景透明度 = 菜单不透明度设置 ×85%（--tip-alpha 由各托盘窗口按配置写入） */
 .v-overlay__content.apple-tip {
-  background: rgba(28, 28, 30, 0.94);
+  background: rgba(28, 28, 30, var(--tip-alpha, 0.85));
   color: #fff;
   font-size: 12px;
   line-height: 1.5;
