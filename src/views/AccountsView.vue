@@ -472,10 +472,6 @@ onBeforeUnmount(() => {
         <span class="s2a-sum">
           <i class="s2a-sum-dot s2a-dot--off" aria-hidden="true"></i>停用 <b>{{ stateCounts.off }}</b>
         </span>
-        <span class="s2a-sum-hint">
-          <v-icon icon="mdi-cursor-default-click-outline" size="13" style="opacity: 0.7" />
-          右键行可选择模型测试 / 启用禁用
-        </span>
       </div>
       <v-data-table
         :headers="headers"
@@ -868,16 +864,6 @@ onBeforeUnmount(() => {
 .s2a-dot--warn { background: #ff9500; }
 .s2a-dot--error { background: #ff3b30; }
 .s2a-dot--off { background: #c7c7cc; }
-.s2a-sum-hint {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #909399;
-  white-space: nowrap;
-}
-
 /* 行首状态竖条：Apple 系统色，替代原整行底色；绝对定位于行首（td 为定位锚） */
 .s2a-bar {
   position: absolute;
