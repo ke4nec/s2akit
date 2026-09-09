@@ -10,6 +10,7 @@ import {
   downloadUpdate,
   init,
   installUpdate,
+  refreshKeyUsage,
   store,
 } from "./store";
 import AccountsView from "./views/AccountsView.vue";
@@ -28,6 +29,28 @@ const tabs = [
   { value: "accounts", label: "账号", icon: "mdi-format-list-bulleted" },
   { value: "settings", label: "设置", icon: "mdi-cog" },
 ] as const;
+
+/** token 数格式化为多少 M（与托盘菜单同口径） */
+function fmtM(n: number): string {
+  const m = n / 1e6;
+  return `${m >= 100 ? m.toFixed(0) : m >= 10 ? m.toFixed(1) : m.toFixed(2)}M`;
+}
+
+function fmtCost(c: number): string {
+  return `$${c >= 1000 ? c.toFixed(0) : c >= 100 ? c.toFixed(1) : c.toFixed(2)}`;
+}
+
+/** 右上角悬停：当前 key 当天用量（与托盘菜单顶部同源同格式），无数据时回退显示邮箱 */
+const authTip = computed(() => {
+  const u = store.keyUsage;
+  if (!u) return store.auth?.email ?? "";
+  return `「${u.key_name}」今日 ${u.requests} 次请求\n输入 ${fmtM(u.input_tokens)} · 输出 ${fmtM(u.output_tokens)} · 缓存 ${fmtM(u.cache_tokens)}\n费用 ${fmtCost(u.cost)} · 共 ${fmtM(u.total_tokens)}`;
+});
+
+/** 悬停即刷新（后端带缓存，开销小），保证看到的是即时值 */
+function onAuthEnter() {
+  void refreshKeyUsage();
+}
 
 const downloadPercent = computed(() => {
   const { progress, total } = store.updater;
@@ -64,6 +87,24 @@ function onCloseToTray() {
   void appWindow.hide().catch(() => {});
 }
 
+/** 标题栏空白区域判定：按钮/输入/链接等交互控件不劫持，保证点得中 */
+function isTitlebarBlank(e: Event): boolean {
+  const t = e.target as HTMLElement | null;
+  return !!t && !t.closest("button, input, select, textarea, a, [contenteditable]");
+}
+
+/** 空白处按下即进入系统拖拽（modal，阻塞到松开）；声明式 drag-region 在
+ * 毛玻璃合成层下不可靠，这里手动兜底，控件点击不受影响 */
+function onTitlebarPress(e: MouseEvent) {
+  if (e.button !== 0 || !isTitlebarBlank(e)) return;
+  void appWindow.startDragging().catch(() => {});
+}
+
+function onTitlebarDblClick(e: MouseEvent) {
+  if (!isTitlebarBlank(e)) return;
+  onToggleMaximize();
+}
+
 onMounted(() => {
   if (!isTrayMenu) void init();
   // 启动 5 秒后静默检查更新；dev 构建跳过，避免开发态误触正式更新
@@ -91,9 +132,16 @@ onBeforeUnmount(() => {
   <TraySubmenuApp v-if="isTraySubmenu" />
   <TrayMenuApp v-else-if="isTrayMenu" />
   <v-app v-else>
-    <!-- 自绘标题栏（原生边框已去掉）：空 白区域可拖拽移动/双击最大化，
-         子控件自身没有 drag-region 属性不受影响 -->
-    <v-app-bar flat density="compact" class="glass-bar title-bar" data-tauri-drag-region>
+    <!-- 自绘标题栏（原生边框已去掉）：空白区域按住拖拽移动/双击最大化，
+         子控件点击不受影响；data-tauri-drag-region 保留，拖不动时由手动兜底 -->
+    <v-app-bar
+      flat
+      density="compact"
+      class="glass-bar title-bar"
+      data-tauri-drag-region
+      @mousedown.left="onTitlebarPress"
+      @dblclick="onTitlebarDblClick"
+    >
       <!-- macOS 分段控件风格导航 -->
       <div class="seg-tabs" role="tablist">
         <button
@@ -113,10 +161,14 @@ onBeforeUnmount(() => {
       <v-spacer data-tauri-drag-region />
       <!-- 账号页工具栏传送目标：AccountsView 把分组选择/刷新渲染到此处，与导航合并为一行 -->
       <div class="appbar-tools" data-tauri-drag-region></div>
-      <div class="auth-status" data-tauri-drag-region :title="store.auth?.email">
-        <span class="status-dot" :class="store.auth ? 'status-dot--on' : 'status-dot--off'" />
-        <span class="auth-email">{{ store.auth ? store.auth.email : "未登录" }}</span>
-      </div>
+      <v-tooltip :text="authTip" :disabled="!authTip" location="bottom">
+        <template #activator="{ props }">
+          <div class="auth-status" v-bind="props" data-tauri-drag-region @mouseenter="onAuthEnter">
+            <span class="status-dot" :class="store.auth ? 'status-dot--on' : 'status-dot--off'" />
+            <span class="auth-email">{{ store.auth ? store.auth.email : "未登录" }}</span>
+          </div>
+        </template>
+      </v-tooltip>
       <div class="win-controls">
         <button class="win-btn" type="button" title="最小化" aria-label="最小化" @click="onMinimize">
           <v-icon icon="mdi-window-minimize" size="16" />
@@ -142,7 +194,8 @@ onBeforeUnmount(() => {
       </div>
     </v-app-bar>
 
-    <v-main>
+    <!-- scrollable：滚动收纳进布局区，滚动条从标题栏下方起，不再占标题栏空间 -->
+    <v-main scrollable>
       <v-container fluid class="app-container">
         <!-- :key 随标签切换重建节点，重放渐显动画 -->
         <div :key="store.tab" class="animate-apple-fade-in">

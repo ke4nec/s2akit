@@ -97,7 +97,6 @@ function onCheckUpdate() {
         <v-icon icon="mdi-server" size="18" />
         <div class="group-head-text">
           <div class="group-title">服务与管理员账号</div>
-          <div class="group-sub">连接 sub2api 服务，凭据仅保存在本机配置文件</div>
         </div>
       </header>
       <div class="row">
@@ -137,7 +136,7 @@ function onCheckUpdate() {
         <div class="ctrl">
           <input
             v-model="totpCode"
-            class="ctrl-input ctrl-input--narrow"
+            class="ctrl-input"
             type="text"
             aria-label="6 位验证码"
             maxlength="6"
@@ -166,25 +165,24 @@ function onCheckUpdate() {
         <v-icon icon="mdi-speedometer" size="18" />
         <div class="group-head-text">
           <div class="group-title">测速参数</div>
-          <div class="group-sub">控制账号批量测速的行为与判定</div>
         </div>
       </header>
       <div class="row">
         <div class="row-label" title="发给模型的提示词，建议保持极短">测试 Prompt</div>
         <div class="ctrl">
-          <input v-model="form.test_prompt" class="ctrl-input ctrl-input--narrow" type="text" aria-label="测试 Prompt" spellcheck="false" />
+          <input v-model="form.test_prompt" class="ctrl-input" type="text" aria-label="测试 Prompt" spellcheck="false" />
         </div>
       </div>
       <div class="row">
         <div class="row-label">单次测试超时（秒）</div>
         <div class="ctrl">
-          <input v-model.number="form.test_timeout_secs" class="ctrl-input ctrl-input--narrow" type="number" aria-label="单次测试超时（秒）" min="5" />
+          <input v-model.number="form.test_timeout_secs" class="ctrl-input" type="number" aria-label="单次测试超时（秒）" min="5" />
         </div>
       </div>
-      <div class="row">
+      <div class="row row--disabled">
         <div class="row-label">批量测试并发数（1-8）</div>
         <div class="ctrl">
-          <input v-model.number="form.test_concurrency" class="ctrl-input ctrl-input--narrow" type="number" aria-label="批量测试并发数（1-8）" min="1" max="8" />
+          <input v-model.number="form.test_concurrency" class="ctrl-input" type="number" aria-label="批量测试并发数（1-8）" min="1" max="8" disabled />
         </div>
       </div>
     </section>
@@ -195,12 +193,12 @@ function onCheckUpdate() {
         <v-icon icon="mdi-dock-right" size="18" />
         <div class="group-head-text">
           <div class="group-title">托盘菜单</div>
-          <div class="group-sub">菜单外观与顶部额度刷新，右键任务栏图标查看效果</div>
         </div>
       </header>
       <div class="row">
         <div class="row-label">任务栏菜单不透明度</div>
         <div class="ctrl slider-wrap">
+          <span class="slider-value">{{ opacityPercent }}%</span>
           <input
             class="ctrl-slider"
             type="range"
@@ -212,7 +210,6 @@ function onCheckUpdate() {
             :style="{ '--p': opacityFill }"
             @input="onOpacityInput"
           />
-          <span class="slider-value">{{ opacityPercent }}%</span>
         </div>
       </div>
       <div class="row">
@@ -223,7 +220,7 @@ function onCheckUpdate() {
           额度刷新间隔（分钟）
         </div>
         <div class="ctrl">
-          <input v-model.number="form.usage_refresh_minutes" class="ctrl-input ctrl-input--narrow" type="number" aria-label="额度刷新间隔（分钟）" min="1" max="1440" />
+          <input v-model.number="form.usage_refresh_minutes" class="ctrl-input" type="number" aria-label="额度刷新间隔（分钟）" min="1" max="1440" />
         </div>
       </div>
     </section>
@@ -234,7 +231,6 @@ function onCheckUpdate() {
         <v-icon icon="mdi-information" size="18" />
         <div class="group-head-text">
           <div class="group-title">关于</div>
-          <div class="group-sub">当前版本与软件更新，正式版经 GitHub Actions 构建发布并签名校验</div>
         </div>
       </header>
       <div class="row">
@@ -243,25 +239,20 @@ function onCheckUpdate() {
           <span class="about-version">v{{ store.updater.current || "…" }}</span>
         </div>
       </div>
-      <div class="row">
-        <div class="row-label">软件更新</div>
-        <div class="ctrl update-ctrl">
-          <span v-if="updateHint" class="update-hint">{{ updateHint }}</span>
-          <v-btn
-            color="primary"
-            variant="tonal"
-            :loading="store.updater.checking"
-            :disabled="store.updater.status === 'downloading'"
-            @click="onCheckUpdate"
-          >
-            {{ store.updater.status === "ready" ? "立即安装" : "检查更新" }}
-          </v-btn>
-        </div>
-      </div>
     </section>
 
-    <!-- 页面底部唯一保存 -->
+    <!-- 页面底部操作：检查更新与保存同一行 -->
     <div class="save-bar">
+      <span v-if="updateHint" class="update-hint">{{ updateHint }}</span>
+      <v-btn
+        color="primary"
+        variant="tonal"
+        :loading="store.updater.checking"
+        :disabled="store.updater.status === 'downloading'"
+        @click="onCheckUpdate"
+      >
+        {{ store.updater.status === "ready" ? "立即安装" : "检查更新" }}
+      </v-btn>
       <v-btn color="primary" :loading="store.saving" @click="doSave">保存</v-btn>
     </div>
   </div>
@@ -304,13 +295,6 @@ function onCheckUpdate() {
   line-height: 1.3;
   color: hsl(var(--foreground));
 }
-.group-sub {
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: hsl(var(--muted-foreground));
-}
-
 .row {
   display: flex;
   align-items: center;
@@ -323,6 +307,8 @@ function onCheckUpdate() {
   border-top: 1px solid #ebeef5;
 }
 .row-label {
+  flex: none;
+  width: 190px;
   font-size: 14px;
   color: hsl(var(--foreground));
   line-height: 1.4;
@@ -333,7 +319,7 @@ function onCheckUpdate() {
   flex: none;
 }
 .ctrl-input {
-  width: 320px;
+  width: 160px;
   max-width: 100%;
   height: 34px;
   padding: 0 12px;
@@ -363,20 +349,31 @@ function onCheckUpdate() {
 .ctrl-input:focus-visible {
   outline: none;
 }
-.ctrl-input--narrow {
-  width: 160px;
+/* 未开放的设置项：输入框禁用态 + 行级弱化（无额外文案） */
+.ctrl-input:disabled {
+  background: #f0f2f5;
+  color: #a8abb2;
+  cursor: not-allowed;
+}
+.ctrl-input:disabled:hover {
+  background: #f0f2f5;
+}
+.row--disabled .row-label {
+  color: hsl(var(--muted-foreground));
 }
 
-/* 滑杆：蓝填充轨道 + 白圆钮 */
+/* 滑杆：数值置于轨道上方，省横向宽度；蓝填充轨道 + 白圆钮 */
 .slider-wrap {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
 }
 .ctrl-slider {
   appearance: none;
   -webkit-appearance: none;
-  width: 220px;
+  /* 与文本输入框同宽（160px），右侧控件纵向对齐 */
+  width: 160px;
   height: 6px;
   border-radius: 3px;
   background: linear-gradient(to right, hsl(var(--accent)) var(--p), #e4e7ed var(--p));
@@ -408,8 +405,7 @@ function onCheckUpdate() {
   box-shadow: 0 0 0 3px hsl(var(--accent) / 0.12);
 }
 .slider-value {
-  min-width: 44px;
-  text-align: right;
+  align-self: flex-end;
   font-size: 13px;
   font-weight: 600;
   color: hsl(var(--accent));
@@ -437,6 +433,8 @@ function onCheckUpdate() {
 .save-bar {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
 }
 .save-bar .v-btn {
   height: 34px;
@@ -449,18 +447,6 @@ function onCheckUpdate() {
   font-weight: 600;
   color: hsl(var(--foreground));
   font-variant-numeric: tabular-nums;
-}
-.update-ctrl {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.update-ctrl .v-btn {
-  height: 32px;
-  min-width: 88px;
-  padding: 0 15px;
-  border-radius: 6px;
-  font-size: 13px;
 }
 .update-hint {
   font-size: 13px;
@@ -477,7 +463,6 @@ function onCheckUpdate() {
     min-width: 0;
   }
   .ctrl-input,
-  .ctrl-input--narrow,
   .ctrl-slider {
     width: 100%;
   }

@@ -12,9 +12,9 @@ const SUBMENU_WIDTH_LOGICAL: f64 = 188.0;
 const CASCADE_GAP_LOGICAL: f64 = 4.0;
 
 /// 按账号数估算菜单逻辑高度：顶部单行 ~28 + 账号行 32/条（紧凑布局）
-/// + 底部操作 4 项 32/条 + 分隔线与余量
+/// + 底部操作 3 项（刷新/主窗口/退出）32/条 + 分隔线与余量
 fn estimate_menu_height(n: usize) -> f64 {
-    (28.0 + n as f64 * 32.0 + 4.0 * 32.0 + 6.0).clamp(220.0, 640.0)
+    (28.0 + n as f64 * 32.0 + 3.0 * 32.0 + 6.0).clamp(220.0, 640.0)
 }
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -432,10 +432,10 @@ mod tests {
 
     #[test]
     fn estimate_height_matches_row_layout() {
-        // 0 账号：28 + 0 + 128 + 6 = 162，触底钳到 220
+        // 0 账号：28 + 0 + 96 + 6 = 130，触底钳到 220
         assert_eq!(estimate_menu_height(0), 220.0);
-        // 10 账号：28 + 320 + 128 + 6 = 482
-        assert_eq!(estimate_menu_height(10), 482.0);
+        // 10 账号：28 + 320 + 96 + 6 = 450
+        assert_eq!(estimate_menu_height(10), 450.0);
         // 账号再多封顶 640，超出部分由菜单内列表滚动
         assert_eq!(estimate_menu_height(100), 640.0);
     }

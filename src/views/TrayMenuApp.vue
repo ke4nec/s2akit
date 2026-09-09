@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountBrief, KeyUsageToday, TestResult } from "../types";
@@ -179,17 +179,6 @@ async function pickGroup(g: { id: number; name: string }) {
     return;
   }
   await reload();
-}
-
-async function testAll() {
-  hide();
-  const ch = new Channel<unknown>();
-  ch.onmessage = () => {};
-  try {
-    await invoke("test_all", { onEvent: ch });
-  } catch {
-    // 主窗口会收到错误提示
-  }
 }
 
 function cancelClose() {
@@ -531,12 +520,6 @@ onBeforeUnmount(() => {
 
         <v-divider />
         <v-list density="compact" class="py-0 bg-transparent tray-actions">
-          <v-list-item density="compact" @click="testAll">
-            <template #prepend>
-              <v-icon icon="mdi-speedometer" size="16" />
-            </template>
-            <v-list-item-title class="text-caption">测试全部账号</v-list-item-title>
-          </v-list-item>
           <v-list-item density="compact" @click="() => reload(true)">
             <template #prepend>
               <v-icon icon="mdi-refresh" size="16" />
