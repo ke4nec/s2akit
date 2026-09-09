@@ -31,8 +31,6 @@ pub struct AppState {
     pub groups: RwLock<Vec<GroupBrief>>,
     /// 每个账号最近一次测试结果（托盘子菜单悬停展示用）
     pub last_results: RwLock<HashMap<i64, TestResult>>,
-    /// test_all 进行中标志（防止并发跑批）
-    pub testing: AtomicBool,
     /// 托盘菜单顶部用量缓存（TTL 由配置 usage_refresh_minutes 决定）
     pub usage_cache: RwLock<Option<UsageCache>>,
     /// 托盘菜单页面是否存活（前端 pong 应答）。

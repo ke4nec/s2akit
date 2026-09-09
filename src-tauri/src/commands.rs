@@ -6,9 +6,7 @@ use crate::sub2api::{
     TestResult, UserInfo,
 };
 use crate::config::AppConfig;
-use futures_util::stream::{self, StreamExt};
 use std::future::Future;
-use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -394,130 +392,6 @@ async fn test_one(
         .unwrap()
         .insert(account.id, result.clone());
     result
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct FastestAccount {
-    pub account_id: i64,
-    pub account_name: String,
-    pub first_token_ms: u64,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct TestAllSummary {
-    pub results: Vec<TestResult>,
-    pub fastest: Option<FastestAccount>,
-    pub failed: usize,
-}
-
-/// 测试当前分组全部账号（托盘与主窗口共用）。
-/// channel 存在时（来自命令调用）逐事件转发，同时始终通过 app 事件广播。
-pub async fn run_test_all(
-    app: AppHandle,
-    channel: Option<Channel<TestProgress>>,
-) -> AppResult<TestAllSummary> {
-    {
-        let state = app.state::<AppState>();
-        if state.testing.swap(true, Ordering::Relaxed) {
-            return Err(AppError::other("已有测速任务在进行中"));
-        }
-    }
-    let out = run_test_all_inner(&app, channel.as_ref()).await;
-    app.state::<AppState>()
-        .testing
-        .store(false, Ordering::Relaxed);
-    out
-}
-
-async fn run_test_all_inner(
-    app: &AppHandle,
-    channel: Option<&Channel<TestProgress>>,
-) -> AppResult<TestAllSummary> {
-    let state = app.state::<AppState>();
-    let cfg = state.config_snapshot();
-    let concurrency = cfg.test_concurrency.clamp(1, 8);
-    drop(state);
-
-    let accounts = {
-        let state = app.state::<AppState>();
-        let cached = state.accounts.read().unwrap().clone();
-        if cached.is_empty() {
-            None
-        } else {
-            Some(cached)
-        }
-    };
-    let accounts = match accounts {
-        Some(a) => a,
-        None => refresh_accounts_task(app).await?,
-    };
-    if accounts.is_empty() {
-        return Err(AppError::other("当前没有可测试的账号（未选择分组或分组为空）"));
-    }
-
-    // 先并发解析每个账号的测试模型。
-    // 必须用 buffered（按提交顺序产出）：buffer_unordered 按完成顺序产出，
-    // 会导致 models 与 accounts 错位，账号用到别的账号的模型。
-    let id_platforms: Vec<(i64, String)> = accounts
-        .iter()
-        .map(|a| (a.id, a.platform.clone()))
-        .collect();
-    let models: Vec<Option<String>> = stream::iter(id_platforms)
-        .map(|(id, platform)| {
-            let app = app.clone();
-            async move { resolve_model(&app, id, &platform).await.unwrap_or(None) }
-        })
-        .buffered(4)
-        .collect()
-        .await;
-
-    let total = accounts.len();
-    let results: Vec<TestResult> = stream::iter(accounts.into_iter().zip(models))
-        .map(|(account, model)| {
-            let app = app.clone();
-            let channel = channel.cloned();
-            async move { test_one(&app, &account, model, channel.as_ref()).await }
-        })
-        .buffer_unordered(concurrency)
-        .collect()
-        .await;
-
-    let fastest = results
-        .iter()
-        .filter(|r| r.success)
-        .filter_map(|r| {
-            r.first_token_ms
-                .map(|ms| (r, ms))
-        })
-        .min_by_key(|(_, ms)| *ms)
-        .map(|(r, ms)| FastestAccount {
-            account_id: r.account_id,
-            account_name: r.account_name.clone(),
-            first_token_ms: ms,
-        });
-    let failed = results.iter().filter(|r| !r.success).count();
-
-    let summary = TestAllSummary {
-        results,
-        fastest: fastest.clone(),
-        failed,
-    };
-    let _ = app.emit("test-all-done", &summary);
-
-    match &fastest {
-        Some(f) => notify(
-            app,
-            &format!(
-                "测速完成：最快 {}（首 token {}ms），成功 {}/{}",
-                f.account_name, f.first_token_ms, total - failed, total
-            ),
-        ),
-        None => notify(app, &format!("测速完成：{total} 个账号全部失败")),
-    }
-
-    // 测试会改变账号限流/错误状态，刷新一次
-    let _ = refresh_accounts_task(app).await;
-    Ok(summary)
 }
 
 // ---------- 启动初始化 ----------
@@ -923,11 +797,6 @@ pub async fn test_account(
         None => resolve_model(&app, account_id, &account.platform).await?,
     };
     Ok(test_one(&app, &account, model, Some(&on_event)).await)
-}
-
-#[tauri::command]
-pub async fn test_all(app: AppHandle, on_event: Channel<TestProgress>) -> AppResult<TestAllSummary> {
-    run_test_all(app, Some(on_event)).await
 }
 
 // ---------- 当前 Key 当天用量 ----------
