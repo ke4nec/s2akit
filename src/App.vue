@@ -44,7 +44,7 @@ onMounted(() => {
         </button>
       </div>
       <v-spacer />
-      <!-- 账号页工具栏传送目标：AccountsView 把分组选择/刷新/测试全部渲染到此处，与导航合并为一行 -->
+      <!-- 账号页工具栏传送目标：AccountsView 把分组选择/刷新渲染到此处，与导航合并为一行 -->
       <div class="appbar-tools"></div>
       <div class="auth-status" :title="store.auth?.email">
         <span class="status-dot" :class="store.auth ? 'status-dot--on' : 'status-dot--off'" />

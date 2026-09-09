@@ -232,11 +232,12 @@ fn place_submenu_window(app: &AppHandle, logical_h: f64) {
     let Ok(pos) = main.outer_position() else {
         return;
     };
-    // 高度按工作区封顶，超出部分由子菜单内模型列表滚动
+    // 高度按工作区封顶，超出部分由子菜单内模型列表滚动；
+    // 下限 56 允许收缩到单项+内边距的最小菜单，避免 fit 后底部残留空白
     let cap = work_area_at(app, pos.x as f64, pos.y as f64)
         .map(|(_, top, _, bottom)| (bottom - top) / scale)
         .unwrap_or(640.0);
-    let h = logical_h.clamp(80.0, cap);
+    let h = logical_h.clamp(56.0, cap);
     let _ = w.set_size(LogicalSize::new(SUBMENU_WIDTH_LOGICAL, h));
     let main_w = MENU_WIDTH_LOGICAL * scale;
     let sub_w = SUBMENU_WIDTH_LOGICAL * scale;

@@ -3,7 +3,6 @@ export interface AppConfig {
   email: string;
   password: string;
   group_id: number | null;
-  default_model: string;
   test_prompt: string;
   test_timeout_secs: number;
   test_concurrency: number;
@@ -78,18 +77,6 @@ export interface TestProgress {
   text: string | null;
   elapsed_ms: number | null;
   result: TestResult | null;
-}
-
-export interface FastestAccount {
-  account_id: number;
-  account_name: string;
-  first_token_ms: number;
-}
-
-export interface TestAllSummary {
-  results: TestResult[];
-  fastest: FastestAccount | null;
-  failed: number;
 }
 
 export interface LoginReply {

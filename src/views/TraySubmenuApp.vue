@@ -39,6 +39,8 @@ async function fit() {
 
 function scheduleFit() {
   requestAnimationFrame(() => void fit());
+  // 兜底：字体/列表渲染晚于首帧的高度变化，延迟再校一次（fit 幂等，仅按内容收敛）
+  window.setTimeout(() => void fit(), 160);
 }
 
 async function hide() {
@@ -82,6 +84,7 @@ function onModelNameEnter(m: ModelBrief, e: Event) {
 /** 分组选择模式：自取分组列表与当前选中 */
 async function loadGroups() {
   closeTip();
+  window.clearTimeout(hoverModelsTimer);
   mode.value = "groups";
   loadingGroups.value = true;
   try {
@@ -115,6 +118,7 @@ async function loadAccount(id: number) {
   models.value = [];
   loadingModels.value = false;
   testing.value = false;
+  window.clearTimeout(hoverModelsTimer);
   try {
     const list = await invoke<AccountBrief[]>("list_accounts", { groupId: null });
     if (pendingId.value !== id) return;
@@ -140,7 +144,18 @@ async function loadAccount(id: number) {
   scheduleFit();
 }
 
-/** “选择模型测试…”：悬停即展开三级模型列表，点击切换收起 */
+/** “选择模型测试…”：悬停约 200ms（意图延迟，划过不展开）或点击切换收起 */
+let hoverModelsTimer: number | undefined;
+
+function hoverModels() {
+  window.clearTimeout(hoverModelsTimer);
+  hoverModelsTimer = window.setTimeout(() => void ensureModels(), 200);
+}
+
+function cancelHoverModels() {
+  window.clearTimeout(hoverModelsTimer);
+}
+
 async function ensureModels() {
   const a = account.value;
   if (!a || testing.value || modelsOpen.value || pendingId.value !== null) return;
@@ -161,6 +176,7 @@ function toggleModels() {
   if (!account.value || testing.value || pendingId.value !== null) return;
   if (modelsOpen.value) {
     closeTip();
+    window.clearTimeout(hoverModelsTimer);
     modelsOpen.value = false;
     models.value = [];
     loadingModels.value = false;
@@ -248,6 +264,7 @@ onMounted(async () => {
   );
 });
 onBeforeUnmount(() => {
+  window.clearTimeout(hoverModelsTimer);
   unlistens.forEach((u) => u());
   document.documentElement.classList.remove("s2a-tray-doc");
 });
@@ -268,20 +285,10 @@ onBeforeUnmount(() => {
         <v-list density="compact" class="py-1 bg-transparent">
           <v-list-item
             density="compact"
-            :disabled="testing || pendingId !== null"
-            @click="onTest()"
-            @contextmenu.stop.prevent="onTest()"
-          >
-            <template #prepend>
-              <v-icon icon="mdi-speedometer" size="16" />
-            </template>
-            <v-list-item-title class="text-caption">测试该账号</v-list-item-title>
-          </v-list-item>
-          <v-list-item
-            density="compact"
             :active="modelsOpen"
             :disabled="testing || pendingId !== null"
-            @mouseenter="ensureModels"
+            @mouseenter="hoverModels"
+            @mouseleave="cancelHoverModels"
             @click="toggleModels"
             @contextmenu.stop.prevent="toggleModels"
           >
@@ -421,6 +428,8 @@ onBeforeUnmount(() => {
 }
 .submenu-card .v-list-item {
   --v-list-item-one-line-height: 32px;
+  /* prepend 间距收紧到 8px（Vuetify 图标后 spacer 默认 32px，过宽不像原生菜单），与主菜单一致 */
+  --v-list-prepend-gap: 8px;
   min-height: 32px;
   border-radius: 7px;
   margin: 0 2px;

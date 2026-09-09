@@ -10,7 +10,6 @@ function defaultConfig(): AppConfig {
     email: "",
     password: "",
     group_id: null,
-    default_model: "",
     test_prompt: "hi",
     test_timeout_secs: 60,
     test_concurrency: 2,
@@ -156,17 +155,6 @@ async function doSubmit2fa() {
           <div class="group-sub">控制账号批量测速的行为与判定</div>
         </div>
       </header>
-      <div class="row">
-        <div
-          class="row-label"
-          title="留空自动选择：优先该账号上次测试的模型，其次平台默认（OpenAI→astra，Claude→opus），否则列表首个文本模型；填写的模型也须在该账号模型列表中才会生效"
-        >
-          默认测试模型
-        </div>
-        <div class="ctrl">
-          <input v-model="form.default_model" class="ctrl-input" type="text" aria-label="默认测试模型" placeholder="留空自动选择" spellcheck="false" />
-        </div>
-      </div>
       <div class="row">
         <div class="row-label" title="发给模型的提示词，建议保持极短">测试 Prompt</div>
         <div class="ctrl">

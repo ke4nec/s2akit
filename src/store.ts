@@ -10,7 +10,6 @@ import type {
   GroupBrief,
   LoginReply,
   ModelBrief,
-  TestAllSummary,
   TestProgress,
   TestResult,
 } from "./types";
@@ -23,7 +22,6 @@ export const store = reactive({
   accounts: [] as AccountBrief[],
   results: {} as Record<number, TestResult>,
   testingIds: new Set<number>(),
-  testingAll: false,
   loadingAccounts: false,
   loadingGroups: false,
   saving: false,
@@ -104,9 +102,6 @@ export async function init() {
     store.accounts = ev.payload;
   });
   await listen<TestProgress>("test-progress", (ev) => applyProgress(ev.payload));
-  await listen<TestAllSummary>("test-all-done", () => {
-    store.testingAll = false;
-  });
   await listen<null>("auth-changed", async () => {
     store.auth = await invoke<AuthInfo | null>("get_auth");
   });
@@ -166,18 +161,6 @@ export async function testAccount(accountId: number, model?: string | null) {
 
 export async function getAccountModels(accountId: number): Promise<ModelBrief[]> {
   return invoke<ModelBrief[]>("get_account_models", { accountId });
-}
-
-export async function testAll() {
-  store.testingAll = true;
-  const ch = new Channel<TestProgress>();
-  ch.onmessage = applyProgress;
-  try {
-    await invoke<TestAllSummary>("test_all", { onEvent: ch });
-  } catch (e) {
-    store.testingAll = false;
-    handleErr(e);
-  }
 }
 
 export async function setSchedulable(accountId: number, schedulable: boolean) {
@@ -241,7 +224,6 @@ export async function logout() {
     store.accounts = [];
     store.results = {};
     store.testingIds.clear();
-    store.testingAll = false;
     snack("已退出登录", "info");
   } catch (e) {
     handleErr(e);

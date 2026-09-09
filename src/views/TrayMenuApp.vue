@@ -200,7 +200,8 @@ function openSubmenu(id: number, rowTop: number) {
   groupsOpen.value = false;
   expandedId.value = id;
   // 子菜单窗口不可聚焦、不抢焦点；菜单内容由子菜单窗口按 accountId 自取
-  invoke("show_submenu", { accountId: id, rowTop, height: 120 }).catch(() => {
+  // 初始高度按两项菜单估算（移除「测试该账号」后 ~74px），随后子菜单 fit 按实测内容校正
+  invoke("show_submenu", { accountId: id, rowTop, height: 80 }).catch(() => {
     expandedId.value = null;
   });
 }
@@ -525,6 +526,12 @@ html.s2a-tray-doc .v-application {
   background: transparent !important;
   overflow: hidden;
 }
+/* 托盘窗口激活时 WebView 会把焦点交给 body，全局 :focus-visible 蓝描边
+   会在菜单外围画出一圈蓝框；托盘菜单为纯鼠标交互，这里禁掉（不影响主窗口） */
+html.s2a-tray-doc:focus-visible,
+html.s2a-tray-doc body:focus-visible {
+  outline: none;
+}
 /* 卡片铺满窗口，无外边距；阴影会贴边裁掉，改用描边；
    macOS 弹出菜单质感：12px 圆角 + 发丝边框（窗口透明，圆角外露出桌面） */
 .tray-wrap {
@@ -611,10 +618,12 @@ html.s2a-tray-doc .v-application {
 .tray-actions {
   flex: none;
 }
-/* 紧凑行高：所有菜单行统一 32px、小号图标（Rust 侧按 32px/行估算窗口高度，勿改） */
+/* 紧凑行高：所有菜单行统一 32px、小号图标（Rust 侧按 32px/行估算窗口高度，勿改）；
+   prepend 间距收紧到 8px（Vuetify 图标后 spacer 默认 32px，过宽不像原生菜单） */
 .tray-list .v-list-item,
 .tray-actions .v-list-item {
   --v-list-item-one-line-height: 32px;
+  --v-list-prepend-gap: 8px;
   min-height: 32px;
   border-radius: 7px;
   margin: 0 2px;

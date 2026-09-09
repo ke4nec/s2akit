@@ -104,7 +104,7 @@
   .seg-tab svg { width: 15px; height: 15px; }
   .appbar .spacer { flex: 1; }
 
-  /* 顶栏工具区：分组胶囊 + 刷新 + 测试全部 */
+  /* 顶栏工具区：分组胶囊 + 刷新 */
   .group-pop {
     display: inline-flex;
     align-items: center;
@@ -143,24 +143,6 @@
   }
   .icon-btn:hover { background: rgba(118, 118, 128, 0.12); }
   .icon-btn svg { width: 15px; height: 15px; }
-
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    height: 28px;
-    padding: 0 13px;
-    border: none;
-    border-radius: var(--radius-ctrl);
-    background: var(--primary);
-    color: #fff;
-    font-size: 12.5px;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .btn-primary:hover { background: var(--primary-hover); }
-  .btn-primary:active { background: var(--primary-active); }
-  .btn-primary svg { width: 14px; height: 14px; }
 
   .auth-status { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-3); }
   .status-dot {
@@ -530,7 +512,7 @@
 <body>
 
   <div class="window">
-    <!-- 顶栏：分段导航 + 分组胶囊 + 刷新 + 测试全部 + 登录状态 -->
+    <!-- 顶栏：分段导航 + 分组胶囊 + 刷新 + 登录状态 -->
     <header class="appbar">
       <nav class="seg-tabs" role="tablist">
         <button class="seg-tab active" type="button">
@@ -550,10 +532,6 @@
       <button class="icon-btn" type="button" title="刷新分组与账号">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       </button>
-      <button class="btn-primary" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 12l6-6"/></svg>
-        测试全部
-      </button>
       <div class="auth-status">
         <span class="status-dot"></span>
         <span>admin@example.com</span>
@@ -571,7 +549,7 @@
           <span class="sum-item"><span class="sum-dot" style="background: var(--sys-gray)"></span>停用 <b>5</b></span>
           <span class="sum-hint">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l7 16 2.5-7.5L21 10z"/></svg>
-            右键行可快捷测试 / 启用禁用
+            右键行可选择模型测试 / 启用禁用
           </span>
         </div>
 
@@ -837,7 +815,7 @@
     排序图标：可排序列头为<b>成对 8×5px 小 chevron</b>（淡灰 <code>#C7C7CC</code>，上＋下，提示可点）；当前排序列标题加深为 <code>#606266</code>，方向对应的 chevron 点亮 <code>#6E6E73</code>（上＝升序、下＝降序，macOS 表头排序指示语义）；悬停列头文字加深。实现：v-data-table 表头用 <code>#header.*</code> 插槽或 <code>sort-icon</code> 自绘同款。<br />
     数字列：首 token / 总耗时改为 <b>13px 半粗 + 等宽数字</b>，按阈值着色（&lt;2s 绿、&lt;5s 橙、其余红，同加深版文本色），单位 ms 用 11px 弱化；测试中两列显示<b>同款灰色横线骨架 shimmer</b>（非旋转，扫光 1.4s 循环，尊重系统减弱动效设置），操作列按钮禁用置灰、不显示转圈，避免动效重复。<br />
     分页：卡片底部分页条与卡片头汇总条同底色（<code>#FAFBFC</code>）上下呼应；左侧「共 N 个账号」，右侧每页条数选择器（填充式 28px、圆角 6px、<b>默认 10 条</b>，与主窗口默认高度「10 行无滚动」匹配）+ 页码按钮（28px、6px 圆角，当前页 Apple 蓝底白字，首/末页禁用对应箭头；页数 ≤7 全量展示，>7 收敛为 首页/尾页/当前±1 加省略号）；空分组（0 账号）时整条隐藏；实现用 v-data-table 的 <code>#bottom</code> 插槽定制替换默认 footer；主窗口默认/最小尺寸 1000×640。<br />
-容器与顶栏：表格卡片与设置页同规格（白卡 8px 圆角、<code>#EBEEF5</code> 边框、1px 行分隔 <code>#F2F3F5</code>、悬停 <code>#F5F7FA</code>）；顶栏保持分段导航 + 分组胶囊 + 刷新 + 「测试全部」主按钮（Apple 蓝 <code>#007AFF</code>，悬停 <code>#4DA2FF</code>、按下 <code>#0066D6</code>）。交互不变：行悬停、右键快捷菜单、列排序（点击开关需 <code>stopPropagation</code> 防止触发行/排序）。
+    容器与顶栏：表格卡片与设置页同规格（白卡 8px 圆角、<code>#EBEEF5</code> 边框、1px 行分隔 <code>#F2F3F5</code>、悬停 <code>#F5F7FA</code>）；顶栏保持分段导航 + 分组胶囊 + 刷新（批量测试入口仅在托盘菜单，主页面不设「测试全部」）。交互不变：行悬停、右键快捷菜单、列排序（点击开关需 <code>stopPropagation</code> 防止触发行/排序）。
   </aside>
 
 </body>

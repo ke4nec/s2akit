@@ -268,10 +268,9 @@ fn is_media_model(id: &str) -> bool {
 }
 
 /// 解析账号的测试模型（未显式指定时），候选均须存在于账号模型列表中：
-/// 1) 设置里固定的 default_model
-/// 2) 该账号上次测试实际使用的模型（持久化在配置里）
-/// 3) 平台默认：openai→astra；anthropic/antigravity→opus-5 优先、opus 次之
-/// 4) 列表中第一个非媒体模型
+/// 1) 该账号上次测试实际使用的模型（持久化在配置里）
+/// 2) 平台默认：openai→astra；anthropic/antigravity→opus-5 优先、opus 次之
+/// 3) 列表中第一个非媒体模型
 async fn resolve_model(
     app: &AppHandle,
     account_id: i64,
@@ -279,7 +278,6 @@ async fn resolve_model(
 ) -> AppResult<Option<String>> {
     let state = app.state::<AppState>();
     let cfg = state.config_snapshot();
-    let fixed = cfg.default_model.trim().to_string();
     let last = cfg.last_models.get(&account_id).cloned();
     let http = state.http.clone();
     let base = cfg.base();
@@ -295,9 +293,6 @@ async fn resolve_model(
     let ids: Vec<String> = models.into_iter().map(|m| m.id).collect();
     let contains = |m: &str| ids.iter().any(|x| x == m);
 
-    if !fixed.is_empty() && contains(&fixed) {
-        return Ok(Some(fixed));
-    }
     if let Some(last) = last {
         if contains(&last) {
             return Ok(Some(last));
@@ -460,7 +455,7 @@ async fn run_test_all_inner(
         return Err(AppError::other("当前没有可测试的账号（未选择分组或分组为空）"));
     }
 
-    // 先并发解析每个账号的测试模型（若未配置全局默认模型）。
+    // 先并发解析每个账号的测试模型。
     // 必须用 buffered（按提交顺序产出）：buffer_unordered 按完成顺序产出，
     // 会导致 models 与 accounts 错位，账号用到别的账号的模型。
     let id_platforms: Vec<(i64, String)> = accounts

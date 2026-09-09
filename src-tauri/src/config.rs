@@ -10,8 +10,6 @@ pub struct AppConfig {
     pub email: String,
     pub password: String,
     pub group_id: Option<i64>,
-    /// 留空表示自动选择测试模型（上次模型 → 平台默认 → 列表首个文本模型）
-    pub default_model: String,
     pub test_prompt: String,
     pub test_timeout_secs: u64,
     pub test_concurrency: usize,
@@ -31,7 +29,6 @@ impl Default for AppConfig {
             email: String::new(),
             password: String::new(),
             group_id: None,
-            default_model: String::new(),
             test_prompt: "hi".into(),
             test_timeout_secs: 60,
             test_concurrency: 2,

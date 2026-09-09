@@ -9,7 +9,6 @@ import {
   setSchedulable,
   store,
   testAccount,
-  testAll,
 } from "../store";
 import type { ModelBrief, TestResult } from "../types";
 
@@ -279,12 +278,6 @@ function closeCtxMenu() {
   ctxModels.value = [];
 }
 
-function ctxTest() {
-  const row = ctxRow.value;
-  closeCtxMenu();
-  if (row && !row.testing) void testAccount(row.id);
-}
-
 function ctxToggle() {
   const row = ctxRow.value;
   closeCtxMenu();
@@ -461,15 +454,6 @@ onBeforeUnmount(() => {
             />
           </template>
         </v-tooltip>
-        <v-btn
-          color="primary"
-          prepend-icon="mdi-speedometer"
-          :loading="store.testingAll"
-          :disabled="!store.accounts.length"
-          @click="testAll"
-        >
-          测试全部
-        </v-btn>
       </div>
     </Teleport>
 
@@ -490,7 +474,7 @@ onBeforeUnmount(() => {
         </span>
         <span class="s2a-sum-hint">
           <v-icon icon="mdi-cursor-default-click-outline" size="13" style="opacity: 0.7" />
-          右键行可快捷测试 / 启用禁用
+          右键行可选择模型测试 / 启用禁用
         </span>
       </div>
       <v-data-table
@@ -741,10 +725,6 @@ onBeforeUnmount(() => {
         @click.stop
         @contextmenu.stop.prevent
       >
-        <button type="button" class="ctx-item" :disabled="ctxRow.testing" @click="ctxTest">
-          <v-icon icon="mdi-speedometer" size="16" />
-          <span>测试该账号</span>
-        </button>
         <!-- 模型二级子菜单：悬停（约 220ms 意图延迟）或点击展开，与托盘级联子菜单同款 -->
         <button
           type="button"
