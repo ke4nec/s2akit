@@ -40,7 +40,7 @@ function fmtCost(c: number): string {
   return `$${c >= 1000 ? c.toFixed(0) : c >= 100 ? c.toFixed(1) : c.toFixed(2)}`;
 }
 
-/** 右上角悬停：当前 key 当天用量（与托盘菜单顶部同源同格式），无数据时回退显示邮箱 */
+/** 右上角悬停：当天用量（与托盘菜单顶部同源同格式），无数据时回退显示邮箱 */
 const authTip = computed(() => {
   const u = store.keyUsage;
   if (!u) return store.auth?.email ?? "";

@@ -24,6 +24,15 @@ export interface UserInfo {
   username: string;
 }
 
+/** API Key 简报（列表接口直接返回明文 secret，前端测试时做 bearer 用） */
+export interface KeyBrief {
+  id: number;
+  name: string;
+  key: string;
+  status: string;
+  group_id: number | null;
+}
+
 export interface GroupBrief {
   id: number;
   name: string;
@@ -85,7 +94,7 @@ export interface LoginReply {
   temp_token: string;
 }
 
-/** 当前使用的 API Key 当天用量（托盘菜单顶部展示） */
+/** 顶部用量展示：所选 Key 或汇总全部（托盘菜单顶部/主窗口右上角同源） */
 export interface KeyUsageToday {
   key_id: number;
   key_name: string;

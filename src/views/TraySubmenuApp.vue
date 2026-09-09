@@ -2,14 +2,22 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
-import type { AccountBrief, ModelBrief, TestResult } from "../types";
+import type { AccountBrief, KeyBrief, ModelBrief, TestResult } from "../types";
 
 /**
- * 级联子菜单独立窗口：账号操作 / 分组选择两种内容，共用窗口弹出，
+ * 级联子菜单独立窗口：账号操作 / Key 操作 / 分组选择三种内容，共用窗口弹出，
  * 主菜单窗口宽度不变、高度不切视图。窗口不可聚焦（不抢焦点），失焦收起走主菜单。
  */
-const mode = ref<"account" | "groups">("account");
+const mode = ref<"account" | "key" | "groups">("account");
 const account = ref<AccountBrief | null>(null);
+/** Key 操作模式状态（与账号态独立存放，避免 id 重叠串台） */
+const keyBrief = ref<KeyBrief | null>(null);
+const pendingKeyId = ref<number | null>(null);
+const keyModelsOpen = ref(false);
+const keyModels = ref<ModelBrief[]>([]);
+const keyLoadingModels = ref(false);
+const keyTesting = ref(false);
+let keyHoverModelsTimer: number | undefined;
 const groups = ref<{ id: number; name: string }[]>([]);
 const currentGroupId = ref<number | null>(null);
 const loadingGroups = ref(false);
@@ -81,10 +89,157 @@ function onModelNameEnter(m: ModelBrief, e: Event) {
   }, TOOLTIP_DELAY);
 }
 
+/** 该 Key 是否为顶部用量统计源（勾选态） */
+const usageSelected = ref(false);
+
+/** Key 操作模式：自取 key 快照（含测试用的 secret），保留旧内容防闪白 */
+async function loadKey(id: number) {
+  closeTip();
+  window.clearTimeout(hoverModelsTimer);
+  mode.value = "key";
+  usageSelected.value = false;
+  try {
+    usageSelected.value = (await invoke<number | null>("get_usage_key").catch(() => null)) === id;
+  } catch {
+    // 忽略
+  }
+  pendingKeyId.value = id;
+  keyModelsOpen.value = false;
+  keyModels.value = [];
+  keyLoadingModels.value = false;
+  keyTesting.value = false;
+  try {
+    const list = await invoke<KeyBrief[]>("list_keys");
+    if (pendingKeyId.value !== id) return;
+    const found = list.find((k) => k.id === id) ?? null;
+    if (!found) {
+      if (keyBrief.value?.id !== id) keyBrief.value = null;
+      await hide();
+      return;
+    }
+    keyBrief.value = found;
+  } catch {
+    if (pendingKeyId.value !== id) return;
+    if (keyBrief.value === null) {
+      await hide();
+      return;
+    }
+  } finally {
+    if (pendingKeyId.value === id) pendingKeyId.value = null;
+  }
+  await nextTick();
+  scheduleFit();
+}
+
+/** Key 的“选择模型测试…”：悬停约 200ms（意图延迟，划过不展开）或点击切换 */
+function hoverKeyModels() {
+  window.clearTimeout(keyHoverModelsTimer);
+  keyHoverModelsTimer = window.setTimeout(() => void ensureKeyModels(), 200);
+}
+
+function cancelHoverKeyModels() {
+  window.clearTimeout(keyHoverModelsTimer);
+}
+
+async function ensureKeyModels() {
+  const k = keyBrief.value;
+  if (!k || keyTesting.value || keyModelsOpen.value || pendingKeyId.value !== null) return;
+  keyModelsOpen.value = true;
+  keyModels.value = [];
+  keyLoadingModels.value = true;
+  try {
+    keyModels.value = await invoke<ModelBrief[]>("get_key_models", { keySecret: k.key });
+  } catch {
+    keyModelsOpen.value = false;
+  } finally {
+    keyLoadingModels.value = false;
+    scheduleFit();
+  }
+}
+
+function toggleKeyModels() {
+  if (!keyBrief.value || keyTesting.value || pendingKeyId.value !== null) return;
+  if (keyModelsOpen.value) {
+    closeTip();
+    window.clearTimeout(keyHoverModelsTimer);
+    keyModelsOpen.value = false;
+    keyModels.value = [];
+    keyLoadingModels.value = false;
+    scheduleFit();
+    return;
+  }
+  void ensureKeyModels();
+}
+
+async function onTestKey(model?: string) {
+  const k = keyBrief.value;
+  if (!k || keyTesting.value || pendingKeyId.value !== null) return;
+  keyTesting.value = true;
+  try {
+    await emitTo("tray-menu", "submenu-test-start", { kind: "key", accountId: k.id });
+  } catch {
+    // 忽略
+  }
+  // 原生菜单语义：点选即收起，进度回主菜单行内展示
+  await hide();
+  let result: TestResult | null = null;
+  try {
+    result = await invoke<TestResult>("tray_test_key", {
+      keyId: k.id,
+      keyName: k.name,
+      keySecret: k.key,
+      model: model ?? null,
+    });
+  } catch {
+    // 失败会走系统通知
+  } finally {
+    keyTesting.value = false;
+  }
+  try {
+    await emitTo("tray-menu", "submenu-tested", { kind: "key", accountId: k.id, result });
+  } catch {
+    // 忽略
+  }
+}
+
+/** “查看额度”：切为该 Key 即切换统计源，再点一次恢复汇总全部 */
+async function onPickUsage() {
+  const k = keyBrief.value;
+  if (!k || keyTesting.value || pendingKeyId.value !== null) return;
+  await hide();
+  try {
+    await invoke("set_usage_key", { keyId: usageSelected.value ? null : k.id });
+  } catch {
+    // 忽略
+  }
+  try {
+    await emitTo("tray-menu", "submenu-usage-changed", {});
+  } catch {
+    // 忽略
+  }
+}
+
+async function onToggleKey() {
+  const k = keyBrief.value;
+  if (!k || keyTesting.value || pendingKeyId.value !== null) return;
+  await hide();
+  try {
+    // 命令返回刷新后的列表，顺事件带回，主菜单直接用，不再多拉一次
+    const keys = await invoke<KeyBrief[]>("set_key_enabled", {
+      keyId: k.id,
+      enabled: k.status !== "active",
+    });
+    await emitTo("tray-menu", "submenu-key-toggled", { keys });
+  } catch {
+    // 失败服务端无变更，主菜单保持原状态即可
+  }
+}
+
 /** 分组选择模式：自取分组列表与当前选中 */
 async function loadGroups() {
   closeTip();
   window.clearTimeout(hoverModelsTimer);
+  window.clearTimeout(keyHoverModelsTimer);
   mode.value = "groups";
   loadingGroups.value = true;
   try {
@@ -112,6 +267,7 @@ async function onPickGroup(id: number) {
 /** 主菜单通过后端事件下发账号 id，子菜单自取最新快照（含启停状态） */
 async function loadAccount(id: number) {
   closeTip();
+  window.clearTimeout(keyHoverModelsTimer);
   mode.value = "account";
   pendingId.value = id;
   modelsOpen.value = false;
@@ -191,7 +347,7 @@ async function onTest(model?: string) {
   if (!a || testing.value || pendingId.value !== null) return;
   testing.value = true;
   try {
-    await emitTo("tray-menu", "submenu-test-start", { accountId: a.id });
+    await emitTo("tray-menu", "submenu-test-start", { kind: "account", accountId: a.id });
   } catch {
     // 忽略
   }
@@ -209,7 +365,7 @@ async function onTest(model?: string) {
     testing.value = false;
   }
   try {
-    await emitTo("tray-menu", "submenu-tested", { accountId: a.id, result });
+    await emitTo("tray-menu", "submenu-tested", { kind: "account", accountId: a.id, result });
   } catch {
     // 忽略
   }
@@ -253,8 +409,9 @@ onMounted(async () => {
   document.documentElement.style.background = "transparent";
   document.body.style.background = "transparent";
   unlistens.push(
-    await listen<number>("submenu-open", (e) => {
-      void loadAccount(e.payload);
+    await listen<{ kind: string; id: number }>("submenu-open", (e) => {
+      if (e.payload.kind === "key") void loadKey(e.payload.id);
+      else void loadAccount(e.payload.id);
     })
   );
   unlistens.push(
@@ -265,6 +422,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   window.clearTimeout(hoverModelsTimer);
+  window.clearTimeout(keyHoverModelsTimer);
   unlistens.forEach((u) => u());
   document.documentElement.classList.remove("s2a-tray-doc");
 });
@@ -350,6 +508,8 @@ onBeforeUnmount(() => {
               </div>
             </template>
           </div>
+          <!-- 原生菜单惯例：启停与其他项分隔 -->
+          <v-divider />
           <v-list-item
             density="compact"
             :disabled="testing || pendingId !== null"
@@ -364,6 +524,117 @@ onBeforeUnmount(() => {
             </template>
             <v-list-item-title class="text-caption">
               {{ account.schedulable ? "禁用该账号" : "启用该账号" }}
+            </v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-card>
+      <v-card
+        v-if="mode === 'key' && keyBrief"
+        elevation="0"
+        rounded="0"
+        class="submenu-card"
+        @mouseenter="onEnter"
+        @mouseleave="onLeave"
+        @contextmenu.stop.prevent
+      >
+        <v-list density="compact" class="py-1 bg-transparent">
+          <v-list-item
+            density="compact"
+            :active="usageSelected"
+            :disabled="keyTesting || pendingKeyId !== null"
+            @click="onPickUsage"
+            @contextmenu.stop.prevent="onPickUsage"
+          >
+            <template #prepend>
+              <v-icon icon="mdi-chart-areaspline" size="16" />
+            </template>
+            <v-list-item-title class="text-caption">
+              {{ usageSelected ? "✓ 正在查看该 Key" : "查看该 Key 额度" }}
+            </v-list-item-title>
+          </v-list-item>
+          <v-list-item
+            density="compact"
+            :active="keyModelsOpen"
+            :disabled="keyTesting || pendingKeyId !== null"
+            @mouseenter="hoverKeyModels"
+            @mouseleave="cancelHoverKeyModels"
+            @click="toggleKeyModels"
+            @contextmenu.stop.prevent="toggleKeyModels"
+          >
+            <template #prepend>
+              <v-icon icon="mdi-file-tree-outline" size="16" />
+            </template>
+            <v-list-item-title class="text-caption">选择模型测试…</v-list-item-title>
+            <template #append>
+              <v-icon icon="mdi-chevron-right" size="14" class="submenu-hint" />
+            </template>
+          </v-list-item>
+          <!-- 三级：模型列表（悬停即加载，内滚，不撑窗口） -->
+          <div v-if="keyModelsOpen" class="submenu-models" @scroll="closeTip">
+            <v-progress-linear v-if="keyLoadingModels" indeterminate color="primary" height="2" />
+            <v-list-item
+              v-else
+              density="compact"
+              @click="onTestKey()"
+              @contextmenu.stop.prevent="onTestKey()"
+            >
+              <template #prepend>
+                <v-icon icon="mdi-flash" size="14" color="primary" />
+              </template>
+              <v-list-item-title class="text-caption">自动选择模型</v-list-item-title>
+            </v-list-item>
+            <template v-if="!keyLoadingModels">
+              <v-list-item
+                v-for="m in keyModels"
+                :key="m.id"
+                density="compact"
+                @click="onTestKey(m.id)"
+                @contextmenu.stop.prevent="onTestKey(m.id)"
+              >
+                <v-tooltip
+                  :model-value="tipId === m.id"
+                  :open-on-hover="false"
+                  :open-on-click="false"
+                  :open-on-focus="false"
+                  :location="tipLocation"
+                  :offset="6"
+                  content-class="apple-tip"
+                  transition="fade-transition"
+                >
+                  <template #activator="{ props }">
+                    <v-list-item-title
+                      v-bind="props"
+                      class="text-caption submenu-model-name"
+                      @mouseenter="onModelNameEnter(m, $event)"
+                      @mouseleave="closeTip"
+                    >
+                      {{ m.display_name || m.id }}
+                    </v-list-item-title>
+                  </template>
+                  {{ tipText }}
+                </v-tooltip>
+              </v-list-item>
+              <div v-if="!keyModels.length" class="text-caption text-disabled px-3 py-2">
+                该 Key 没有可用的模型列表
+              </div>
+            </template>
+          </div>
+          <!-- 原生菜单惯例：启停与其他项分隔 -->
+          <v-divider />
+          <v-list-item
+            density="compact"
+            :disabled="keyTesting || pendingKeyId !== null"
+            @click="onToggleKey"
+            @contextmenu.stop.prevent="onToggleKey"
+          >
+            <template #prepend>
+              <v-icon
+                :icon="keyBrief.status === 'active' ? 'mdi-circle-outline' : 'mdi-circle'"
+                size="16"
+              />
+            </template>
+            <v-list-item-title class="text-caption">
+              {{ keyBrief.status === "active" ? "禁用该 Key" : "启用该 Key" }}
             </v-list-item-title>
           </v-list-item>
         </v-list>
@@ -440,6 +711,10 @@ onBeforeUnmount(() => {
 }
 .submenu-card .v-list-item__overlay {
   border-radius: 7px;
+}
+.submenu-card .v-divider {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  opacity: 1 !important;
 }
 /* 子菜单指示箭头：常态弱化，悬浮时加深 */
 .submenu-hint {

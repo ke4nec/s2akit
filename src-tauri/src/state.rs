@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::sub2api::{AccountBrief, GroupBrief, TestResult};
+use crate::sub2api::{AccountBrief, GroupBrief, KeyBrief, TestResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -12,9 +12,11 @@ pub struct AuthEntry {
     pub expires_at: Instant,
 }
 
-/// 托盘菜单顶部用量缓存：在配置的刷新间隔内重复打开菜单不重复请求 API
+/// 托盘菜单顶部用量缓存：按所选 Key 分键（None = 汇总全部），
+/// 在配置的刷新间隔内重复打开菜单不重复请求 API
 #[derive(Clone)]
 pub struct UsageCache {
+    pub key: Option<i64>,
     pub fetched_at: Instant,
     pub usage: Option<crate::commands::KeyUsageToday>,
 }
@@ -28,11 +30,15 @@ pub struct AppState {
     pub group_name: RwLock<String>,
     /// 当前目标分组的账号快照（托盘菜单用）
     pub accounts: RwLock<Vec<AccountBrief>>,
+    /// API Key 快照（托盘 key 模式首屏高度估算用）
+    pub keys: RwLock<Vec<KeyBrief>>,
     pub groups: RwLock<Vec<GroupBrief>>,
     /// 每个账号最近一次测试结果（托盘子菜单悬停展示用）
     pub last_results: RwLock<HashMap<i64, TestResult>>,
     /// 托盘菜单顶部用量缓存（TTL 由配置 usage_refresh_minutes 决定）
     pub usage_cache: RwLock<Option<UsageCache>>,
+    /// 顶部用量所选 Key（None = 汇总全部），子菜单“查看额度”切换
+    pub usage_key: std::sync::Mutex<Option<i64>>,
     /// 托盘菜单页面是否存活（前端 pong 应答）。
     /// 开发构建加载 vite 服务器，服务器不在时 webview 会停留在错误页，
     /// 借此在下右键时触发重载自愈

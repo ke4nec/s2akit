@@ -18,6 +18,9 @@ pub struct UserInfo {
     pub email: String,
     #[serde(default)]
     pub username: String,
+    /// admin / user：决定前端展示分组与账号管理入口
+    #[serde(default)]
+    pub role: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -412,49 +415,302 @@ pub async fn set_schedulable(
     envelope_ok(resp).await
 }
 
-// ---------- API Key 当天用量 ----------
+// ---------- API Key 列表 / 状态 / 模型 / 测试 ----------
 
+/// 托盘 key 模式用：列表接口直接返回明文 secret，前端测试 /models 与对话时用它做 bearer
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiKeyBrief {
+pub struct KeyBrief {
+    #[serde(default)]
     pub id: i64,
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
+    pub key: String,
+    #[serde(default = "default_status")]
+    pub status: String,
+    #[serde(default)]
+    pub group_id: Option<i64>,
 }
 
-/// "当前使用的 key" = 最近一条用量日志所属的 key（列表默认 created_at 倒序，取第一条）。
-/// 无任何用量记录时返回 None。
-pub async fn current_api_key(
+/// key 列表（自动翻页，最多 10 页）
+pub async fn list_keys(http: &reqwest::Client, base: &str, token: &str) -> AppResult<Vec<KeyBrief>> {
+    let mut all: Vec<KeyBrief> = Vec::new();
+    let mut page = 1u32;
+    loop {
+        let resp = http
+            .get(format!("{base}/api/v1/keys?page={page}&pageSize=200"))
+            .bearer_auth(token)
+            .send()
+            .await?;
+        #[derive(Deserialize)]
+        struct Page {
+            #[serde(default)]
+            items: Vec<KeyBrief>,
+            #[serde(default)]
+            pages: Option<u32>,
+        }
+        let p: Page = envelope(resp).await?;
+        let got = p.items.len();
+        all.extend(p.items);
+        let pages = p.pages.unwrap_or(1).max(1);
+        if got == 0 || page >= pages || page >= 10 {
+            break;
+        }
+        page += 1;
+    }
+    Ok(all)
+}
+
+/// key 启停（status 取 active / inactive，服务端鉴权：只能操作自己的 key）
+pub async fn set_key_status(
     http: &reqwest::Client,
     base: &str,
     token: &str,
-) -> AppResult<Option<ApiKeyBrief>> {
+    id: i64,
+    status: &str,
+) -> AppResult<()> {
     let resp = http
-        .get(format!("{base}/api/v1/admin/usage?page=1&pageSize=1"))
+        .put(format!("{base}/api/v1/keys/{id}"))
         .bearer_auth(token)
+        .json(&json!({ "status": status }))
         .send()
         .await?;
-    #[derive(Deserialize, Default)]
-    struct Page {
-        #[serde(default)]
-        items: Vec<Value>,
-    }
-    let page: Page = envelope(resp).await?;
-    let key = page
-        .items
-        .first()
-        .and_then(|it| it.get("api_key"))
-        .filter(|k| !k.is_null());
-    let Some(key) = key else {
-        return Ok(None);
-    };
-    let id = key["id"].as_i64().unwrap_or_default();
-    if id == 0 {
-        return Ok(None);
-    }
-    Ok(Some(ApiKeyBrief {
-        id,
-        name: key["name"].as_str().unwrap_or_default().to_string(),
-    }))
+    envelope_ok(resp).await
 }
+
+/// 用 key 自身做 bearer 取 OpenAI 兼容模型列表（无 envelope 包裹）
+pub async fn key_models(
+    http: &reqwest::Client,
+    base: &str,
+    key_secret: &str,
+) -> AppResult<Vec<ModelBrief>> {
+    let resp = http
+        .get(format!("{base}/v1/models"))
+        .bearer_auth(key_secret)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(openai_err(resp).await);
+    }
+    #[derive(Deserialize)]
+    struct List {
+        #[serde(default)]
+        data: Vec<ModelBrief>,
+    }
+    resp.json()
+        .await
+        .map(|l: List| l.data)
+        .map_err(|e| AppError::Other(format!("模型列表解析失败: {e}")))
+}
+
+/// OpenAI 错误体解析：{message} 或 {error:{message}}，兜底 HTTP 状态
+async fn openai_err(resp: reqwest::Response) -> AppError {
+    let status = resp.status().as_u16();
+    match resp.json::<Value>().await {
+        Ok(v) => {
+            let msg = v["message"]
+                .as_str()
+                .or_else(|| v["error"]["message"].as_str())
+                .unwrap_or("未知错误");
+            AppError::Api {
+                message: msg.to_string(),
+                code: None,
+                status: Some(status),
+            }
+        }
+        Err(_) => AppError::Api {
+            message: format!("HTTP {status}"),
+            code: None,
+            status: Some(status),
+        },
+    }
+}
+
+/// 媒体模型判定（key 自动选模型时跳过，与账号侧规则一致）
+fn is_media_model_id(id: &str) -> bool {
+    let id = id.to_lowercase();
+    ["image", "video", "audio", "tts", "whisper", "sora", "realtime", "dall", "veo"]
+        .iter()
+        .any(|k| id.contains(k))
+}
+
+/// 用 key 直接做 OpenAI 兼容对话测试（SSE），计时口径与账号测试一致：
+/// 首个非空 content 增量 = 首 token；finish / [DONE] = 总耗时
+#[allow(clippy::too_many_arguments)]
+pub async fn test_key(
+    http: &reqwest::Client,
+    base: &str,
+    key_secret: &str,
+    key_id: i64,
+    key_name: &str,
+    model: Option<&str>,
+    prompt: &str,
+    timeout: Duration,
+) -> TestResult {
+    let start = Instant::now();
+    let mut result = TestResult {
+        // 复用字段承载 key 维度（前端按 key 展示，不与账号结果混存）
+        account_id: key_id,
+        account_name: key_name.to_string(),
+        success: false,
+        model: model.unwrap_or("").to_string(),
+        first_token_ms: None,
+        total_ms: None,
+        content_preview: String::new(),
+        error: None,
+    };
+    // 未指定模型时取 /v1/models 首个非媒体模型（与“自动选择”语义一致）
+    let model = match model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()) {
+        Some(m) => Some(m),
+        None => match key_models(http, base, key_secret).await {
+            Ok(models) => models
+                .into_iter()
+                .map(|m| m.id)
+                .find(|id| !is_media_model_id(id)),
+            Err(e) => {
+                finish_err(&mut result, &start, &format!("获取模型列表失败: {e}"));
+                return result;
+            }
+        },
+    };
+    let Some(model) = model else {
+        finish_err(&mut result, &start, "该 Key 没有可用模型");
+        return result;
+    };
+    result.model = model.clone();
+
+    let send = async {
+        http.post(format!("{base}/v1/chat/completions"))
+            .bearer_auth(key_secret)
+            .json(&json!({
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": true,
+            }))
+            .send()
+            .await
+    };
+
+    let resp = match tokio::time::timeout(Duration::from_secs(20), send).await {
+        Err(_) => {
+            finish_err(&mut result, &start, "连接超时（20 秒无响应）");
+            return result;
+        }
+        Ok(Err(e)) => {
+            finish_err(&mut result, &start, &format!("网络错误: {e}"));
+            return result;
+        }
+        Ok(Ok(r)) => r,
+    };
+
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let msg = match resp.json::<Value>().await {
+            Ok(v) => v["message"]
+                .as_str()
+                .or_else(|| v["error"]["message"].as_str())
+                .unwrap_or("未知错误")
+                .to_string(),
+            Err(_) => format!("HTTP {status}"),
+        };
+        finish_err(&mut result, &start, &msg);
+        return result;
+    }
+
+    let mut stream = resp.bytes_stream();
+    let mut buf: Vec<u8> = Vec::new();
+    let deadline = start + timeout;
+    let mut terminal = false;
+
+    while !terminal {
+        let remain = deadline.saturating_duration_since(Instant::now());
+        if remain.is_zero() {
+            finish_err(&mut result, &start, &format!("测试超时（{} 秒）", timeout.as_secs()));
+            break;
+        }
+        match tokio::time::timeout(remain, stream.next()).await {
+            Err(_) => {
+                if !result.success {
+                    finish_err(&mut result, &start, &format!("测试超时（{} 秒）", timeout.as_secs()));
+                }
+                break;
+            }
+            Ok(None) => {
+                if !result.success && result.error.is_none() {
+                    // 流正常结束：按成功结算（与 [DONE] 同语义）
+                    result.success = true;
+                    result.total_ms = Some(start.elapsed().as_millis() as u64);
+                }
+                break;
+            }
+            Ok(Some(Err(e))) => {
+                if !result.success && result.error.is_none() {
+                    finish_err(&mut result, &start, &format!("网络错误: {e}"));
+                }
+                break;
+            }
+            Ok(Some(Ok(chunk))) => {
+                buf.extend_from_slice(&chunk);
+                while let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
+                    let frame: Vec<u8> = buf.drain(..pos + 2).collect();
+                    let frame_text = String::from_utf8_lossy(&frame);
+                    for line in frame_text.lines() {
+                        let Some(payload) = line.strip_prefix("data:") else {
+                            continue;
+                        };
+                        let payload = payload.strip_prefix(' ').unwrap_or(payload);
+                        if payload == "[DONE]" {
+                            // 错误已记录时不再翻回成功（同包内 error 与 DONE 连发）
+                            if result.error.is_none() {
+                                result.success = true;
+                                result.total_ms = Some(start.elapsed().as_millis() as u64);
+                            }
+                            terminal = true;
+                            break;
+                        }
+                        let Ok(ev) = serde_json::from_str::<Value>(payload) else {
+                            continue;
+                        };
+                        // 服务端随流内联错误（HTTP 200 但 data 带 error）
+                        if let Some(err) = ev.get("error") {
+                            let msg = err["message"].as_str().unwrap_or("未知错误");
+                            finish_err(&mut result, &start, msg);
+                            terminal = true;
+                            break;
+                        }
+                        let choice = &ev["choices"][0];
+                        if !choice.is_null() && !choice["finish_reason"].is_null() {
+                            if result.error.is_none() {
+                                result.success = true;
+                                result.total_ms = Some(start.elapsed().as_millis() as u64);
+                            }
+                            terminal = true;
+                            break;
+                        }
+                        let text = choice["delta"]["content"].as_str().unwrap_or("");
+                        if text.is_empty() {
+                            continue;
+                        }
+                        let elapsed = start.elapsed().as_millis() as u64;
+                        if result.first_token_ms.is_none() {
+                            result.first_token_ms = Some(elapsed);
+                        }
+                        let used = result.content_preview.chars().count();
+                        if used < 160 {
+                            let remain = 160 - used;
+                            result
+                                .content_preview
+                                .push_str(&text.chars().take(remain).collect::<String>());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+
+// ---------- API Key 当天用量 ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageStats {
@@ -643,8 +899,11 @@ where
                                 });
                             }
                             "test_complete" => {
-                                result.success = ev["success"].as_bool().unwrap_or(true);
-                                result.total_ms = Some(start.elapsed().as_millis() as u64);
+                                // 错误已记录时不再翻回成功（同包内 error 与 complete 连发）
+                                if result.error.is_none() {
+                                    result.success = ev["success"].as_bool().unwrap_or(true);
+                                    result.total_ms = Some(start.elapsed().as_millis() as u64);
+                                }
                                 terminal = true;
                             }
                             "error" => {

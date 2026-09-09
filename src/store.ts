@@ -141,7 +141,7 @@ export async function refreshKeyUsage() {
     return;
   }
   try {
-    store.keyUsage = await invoke<KeyUsageToday | null>("get_key_usage_today");
+    store.keyUsage = await invoke<KeyUsageToday | null>("get_usage_today");
   } catch {
     // 静默，保持旧值
   }

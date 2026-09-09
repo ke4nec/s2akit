@@ -1,6 +1,13 @@
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition};
 
+/// 子菜单打开目标：账号操作 / Key 操作，子菜单窗口按 kind 渲染对应内容
+#[derive(serde::Serialize, Clone, Copy)]
+struct SubmenuTarget {
+    kind: &'static str,
+    id: i64,
+}
+
 pub const TRAY_ID: &str = "s2akit-tray";
 
 /// 托盘菜单逻辑宽度（CSS px），与 tauri.conf 中 tray-menu 的 width 保持一致。
@@ -11,10 +18,14 @@ const SUBMENU_WIDTH_LOGICAL: f64 = 188.0;
 /// 主菜单窗口与级联子菜单窗口之间的逻辑间隙（CSS px）
 const CASCADE_GAP_LOGICAL: f64 = 4.0;
 
+/// 菜单最小逻辑高度：10 行免滚动 + 顶栏/分隔线/底部操作（与前端 fit 下限一致，
+/// 内容再少也不缩成一条缝，底部操作区永远贴菜单底边）
+const MENU_MIN_HEIGHT_LOGICAL: f64 = 420.0;
+
 /// 按账号数估算菜单逻辑高度：顶部单行 ~28 + 账号行 32/条（紧凑布局）
-/// + 底部操作 3 项（刷新/主窗口/退出）32/条 + 分隔线与余量
+/// + 底部操作 2 项（刷新/退出）32/条 + 分隔线与余量，不低于最小高度
 fn estimate_menu_height(n: usize) -> f64 {
-    (28.0 + n as f64 * 32.0 + 3.0 * 32.0 + 6.0).clamp(220.0, 640.0)
+    (28.0 + n as f64 * 32.0 + 2.0 * 32.0 + 6.0).clamp(MENU_MIN_HEIGHT_LOGICAL, 640.0)
 }
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -66,13 +77,21 @@ pub fn show_menu_window(app: &AppHandle, cursor: PhysicalPosition<f64>) {
         .menu_anchor
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some((cursor.x, cursor.y));
-    // 先按账号数粗估高度立即弹出，前端渲染完成后会经 fit_menu 用真实内容高度修正
-    let n = app
-        .state::<crate::state::AppState>()
+    // 先按账号/key 数粗估高度立即弹出，前端渲染完成后会经 fit_menu 用真实内容高度修正
+    // （后端不知道前端当前是组模式还是 key 模式，取两者较大值，宁高勿矮）
+    let state = app.state::<crate::state::AppState>();
+    let n = state
         .accounts
         .read()
         .unwrap_or_else(|e| e.into_inner())
-        .len();
+        .len()
+        .max(
+            state
+                .keys
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .len(),
+        );
     let logical_h = estimate_menu_height(n);
     place_menu(app, &w, logical_h);
     show_menu(app);
@@ -152,7 +171,7 @@ pub(crate) fn round_window_corners(w: &tauri::WebviewWindow) {
 /// 抢走主菜单焦点（focusable 仅防点击激活），此处立刻把焦点还给主菜单，
 /// 配合主菜单失焦延迟二次确认，避免误触发点消。数据由 submenu-open 事件带
 /// account_id 通知子菜单窗口自取。
-pub fn show_submenu_window(app: &AppHandle, account_id: i64, row_top: f64, height: f64) {
+pub fn show_submenu_window(app: &AppHandle, kind: &str, target_id: i64, row_top: f64, height: f64) {
     *app
         .state::<crate::state::AppState>()
         .submenu_row_top
@@ -165,7 +184,11 @@ pub fn show_submenu_window(app: &AppHandle, account_id: i64, row_top: f64, heigh
     if let Some(main) = app.get_webview_window("tray-menu") {
         let _ = main.set_focus();
     }
-    let _ = app.emit_to("tray-submenu", "submenu-open", account_id);
+    let target = SubmenuTarget {
+        kind: if kind == "key" { "key" } else { "account" },
+        id: target_id,
+    };
+    let _ = app.emit_to("tray-submenu", "submenu-open", target);
 }
 
 /// 显示分组级联子菜单独立窗口：与账号子菜单共用 tray-submenu 窗口，
@@ -432,10 +455,10 @@ mod tests {
 
     #[test]
     fn estimate_height_matches_row_layout() {
-        // 0 账号：28 + 0 + 96 + 6 = 130，触底钳到 220
-        assert_eq!(estimate_menu_height(0), 220.0);
-        // 10 账号：28 + 320 + 96 + 6 = 450
-        assert_eq!(estimate_menu_height(10), 450.0);
+        // 0 账号：28 + 0 + 64 + 6 = 98，触底钳到最小高度 420
+        assert_eq!(estimate_menu_height(0), 420.0);
+        // 10 账号：28 + 320 + 64 + 6 = 418，同样触最小高度 420
+        assert_eq!(estimate_menu_height(10), 420.0);
         // 账号再多封顶 640，超出部分由菜单内列表滚动
         assert_eq!(estimate_menu_height(100), 640.0);
     }
