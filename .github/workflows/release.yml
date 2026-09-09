@@ -25,6 +25,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # tag 与 tauri.conf.json 版本不一致时直接失败：
+      # updater 只认 latest.json 里的 version（来自 conf），忘升版本号会导致更新提示静默失效
+      - name: Verify tag matches tauri.conf.json version
+        shell: bash
+        run: |
+          CONF_VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          if [ "$CONF_VER" != "$TAG_VER" ]; then
+            echo "::error::tag $GITHUB_REF_NAME 与 tauri.conf.json version $CONF_VER 不一致"
+            exit 1
+          fi
+
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri

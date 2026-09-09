@@ -254,10 +254,16 @@ async function afterLogin() {
 /** 待安装的更新资源（后端句柄），丢弃时需 close 释放 */
 let pendingUpdate: Update | null = null;
 
+/** 弹更新对话框；主窗口可能已隐藏到托盘，顺带带出主窗口保证提示可见 */
+function showUpdateDialog() {
+  store.updater.dialog = true;
+  void invoke("open_main_window").catch(() => {});
+}
+
 export async function checkForUpdates(manual = false) {
   if (store.updater.status === "ready") {
     // 已有校验通过的更新待安装，直接弹窗确认即可
-    store.updater.dialog = true;
+    showUpdateDialog();
     return;
   }
   if (store.updater.checking || store.updater.status === "downloading") return;
@@ -272,7 +278,7 @@ export async function checkForUpdates(manual = false) {
       store.updater.version = update.version;
       store.updater.notes = update.body ?? "";
       store.updater.status = "available";
-      store.updater.dialog = true;
+      showUpdateDialog();
     } else if (manual) {
       snack(`已是最新版本 v${store.updater.current}`, "success");
     }
@@ -301,7 +307,7 @@ export async function downloadUpdate() {
     });
     store.updater.status = "ready";
     // 下载期间用户可能收起对话框转后台，完成后重新弹出确认安装
-    store.updater.dialog = true;
+    showUpdateDialog();
   } catch (e) {
     store.updater.status = "available";
     handleErr(e);

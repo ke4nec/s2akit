@@ -132,7 +132,7 @@ onMounted(() => {
             </v-btn>
           </div>
         </div>
-          <div class="compliance-footer">
+        <div class="compliance-footer">
           <v-btn
             color="primary"
             :disabled="!store.compliance.info"
