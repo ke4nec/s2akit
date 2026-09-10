@@ -1,5 +1,10 @@
 # s2akit
 
+[![Release](https://img.shields.io/github/v/release/ke4nec/s2akit)](https://github.com/ke4nec/s2akit/releases)
+[![Downloads](https://img.shields.io/github/downloads/ke4nec/s2akit/total)](https://github.com/ke4nec/s2akit/releases)
+[![CI](https://github.com/ke4nec/s2akit/actions/workflows/ci.yml/badge.svg)](https://github.com/ke4nec/s2akit/actions)
+[![License](https://img.shields.io/github/license/ke4nec/s2akit)](./LICENSE)
+
 给自己搭了 [sub2api](https://github.com/Wei-Shaw/sub2api) 做中转管理的桌面小工具：
 在电脑上管理账号和 API Key，一键真实测速、切换可用账号，顺手看每天的用量。
 
