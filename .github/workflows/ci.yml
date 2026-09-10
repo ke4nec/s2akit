@@ -136,7 +136,8 @@ jobs:
           cp src-tauri/target/release/bundle/deb/*.deb ci-dist/
           cp src-tauri/target/release/bundle/appimage/*.AppImage* ci-dist/ || true
           cp src-tauri/target/release/bundle/rpm/*.rpm ci-dist/ || true
-          find src-tauri/target/release/bundle \( -name '*.sig' -o -name '*.tar.gz*' \) -type f | while read -r f; do cp "$f" ci-dist/ || true; done
+          # 只收 updater 产物（.sig / .tar.gz），排除 deb 打包中间文件 data.tar.gz、control.tar.gz
+          find src-tauri/target/release/bundle \( -name '*.sig' -o -name '*.tar.gz*' \) -type f ! -name 'data.tar.gz' ! -name 'control.tar.gz' | while read -r f; do cp "$f" ci-dist/ || true; done
           echo "APP_VERSION=$version" >> "$GITHUB_ENV"
           ls -la ci-dist/
 
