@@ -169,17 +169,19 @@ jobs:
           echo "[act] ${{ matrix.platform }} staged files:"
           ls -la dist/
 
+  # 注意：job 级 if 不支持 env 上下文，ACT 判断只能放在 step 级
   rolling-release:
     needs: build
-    if: ${{ !env.ACT }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
+        if: ${{ !env.ACT }}
         uses: actions/checkout@v7
 
       # 三平台产物汇总到 assets/，合并上传到同一个 ci-latest
       - name: Download all bundles
+        if: ${{ !env.ACT }}
         uses: actions/download-artifact@v4
         with:
           pattern: bundles-*
@@ -187,11 +189,13 @@ jobs:
           merge-multiple: true
 
       - name: List assets
+        if: ${{ !env.ACT }}
         shell: bash
         run: ls -laR assets/
 
       # 滚动 prerelease：每次 push 更新同一个 ci-latest，上传前清空旧资产，Release 存储不累积
       - name: Upload to rolling release
+        if: ${{ !env.ACT }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -223,7 +227,7 @@ jobs:
 
       # 立刻删除本轮中转 Artifacts，不等 1 天过期，Actions 存储及时释放
       - name: Delete workflow artifacts
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
