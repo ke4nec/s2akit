@@ -1,7 +1,8 @@
-# 发布流水线：推送 v* 标签触发，构建 Windows NSIS 安装包并发布 GitHub Release。
+# 发布流水线：推送 v* 标签触发，构建 Windows/macOS/Linux 安装包并发布 GitHub Release。
 # tauri-action 检测到 updater 配置后会自动生成 latest.json（含各产物 minisign 签名），
 # 客户端即通过 releases/latest/download/latest.json 检查与校验更新。
 # 发版前需同步升三处版本号：package.json / src-tauri/Cargo.toml / src-tauri/tauri.conf.json
+# 存储说明：本流水线不产生 Actions Artifacts（产物由 tauri-action 直传 Release），无中间存储可清理。
 name: Release
 
 on:
@@ -14,7 +15,20 @@ permissions:
 
 jobs:
   publish:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+          - platform: ubuntu-22.04
+            target: ""
+            args: ""
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +38,17 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Rust target
+        if: ${{ matrix.target != '' }}
+        run: rustup target add ${{ matrix.target }}
+
+      # Linux 打包依赖：webkit/appindicator 等系统库 Runner 镜像默认不带
+      - name: Install Linux dependencies
+        if: ${{ matrix.platform == 'ubuntu-22.04' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libfuse2 patchelf
 
       # tag 与 tauri.conf.json 版本不一致时直接失败：
       # updater 只认 latest.json 里的 version（来自 conf），忘升版本号会导致更新提示静默失效
@@ -37,9 +62,11 @@ jobs:
             exit 1
           fi
 
+      # npm / Cargo 双缓存：三平台矩阵各自命中依赖缓存，避免每次发版全量编译
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
 
       - name: Install frontend dependencies
         run: npm ci
@@ -54,4 +81,4 @@ jobs:
           releaseBody: "见附件资产下载安装；已安装用户可由应用内自动更新升级。"
           releaseDraft: false
           prerelease: false
-          args: --target x86_64-pc-windows-msvc
+          args: ${{ matrix.args }}
