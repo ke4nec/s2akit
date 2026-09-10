@@ -1,6 +1,6 @@
 [package]
 name = "s2akit"
-version = "0.2.0"
+version = "0.2.1"
 description = "sub2api 账号测速与切换托盘工具"
 authors = ["niq"]
 edition = "2021"
