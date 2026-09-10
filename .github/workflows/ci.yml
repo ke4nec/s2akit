@@ -106,15 +106,14 @@ jobs:
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           New-Item -ItemType Directory -Path ci-dist -Force | Out-Null
           $exe = Get-Item 'src-tauri/target/release/s2akit.exe'
-          $portableName = "s2akit_${version}_windows-x64_portable.exe"
           $portableZip = "ci-dist/s2akit_${version}_windows-x64_portable.zip"
-          # portable 改为 zip 分发：包内 exe 名与原来 portable 同名，解压即用
+          # portable 改为 zip 分发：包内保持 s2akit.exe 原名，解压即用
           $stage = Join-Path ([System.IO.Path]::GetTempPath()) ("s2akit-portable-" + [Guid]::NewGuid().ToString("N"))
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           try {
-            Copy-Item $exe.FullName (Join-Path $stage $portableName) -Force
+            Copy-Item $exe.FullName (Join-Path $stage "s2akit.exe") -Force
             if (Test-Path $portableZip) { Remove-Item $portableZip -Force }
-            Compress-Archive -Path (Join-Path $stage $portableName) -DestinationPath $portableZip -CompressionLevel Optimal -Force
+            Compress-Archive -Path (Join-Path $stage "s2akit.exe") -DestinationPath $portableZip -CompressionLevel Optimal -Force
           } finally {
             Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
           }
