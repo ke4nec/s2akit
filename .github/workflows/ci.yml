@@ -80,11 +80,14 @@ jobs:
         run: npm run tauri build
 
       # act 容器里没有 Rust/系统工具链，无法真实编译，用假产物走通后续流程
+      # 注意： staging 目录必须避开 dist/（Vite 前端产物目录，tauri build 后含 index.html/assets/），
+      # 否则前端文件会混入 Artifacts，导致 rolling-release 下载后出现 assets/assets 目录，
+      # gh release upload 遇到目录直接失败（read assets/assets: is a directory）
       - name: Simulate bundle artifacts (act)
         if: ${{ env.ACT }}
         shell: bash
         run: |
-          mkdir -p dist src-tauri/target/release/bundle/nsis src-tauri/target/release/bundle/msi src-tauri/target/release/bundle/dmg src-tauri/target/release/bundle/macos src-tauri/target/release/bundle/deb src-tauri/target/release/bundle/appimage src-tauri/target/release
+          mkdir -p ci-dist src-tauri/target/release/bundle/nsis src-tauri/target/release/bundle/msi src-tauri/target/release/bundle/dmg src-tauri/target/release/bundle/macos src-tauri/target/release/bundle/deb src-tauri/target/release/bundle/appimage src-tauri/target/release
           printf 'dummy exe' > 'src-tauri/target/release/s2akit.exe'
           printf 'dummy nsis' > 'src-tauri/target/release/bundle/nsis/s2akit_0.1.0_x64-setup.exe'
           printf 'dummy msi' > 'src-tauri/target/release/bundle/msi/s2akit_0.1.0_x64_en-US.msi'
@@ -93,22 +96,23 @@ jobs:
           printf 'dummy deb' > 'src-tauri/target/release/bundle/deb/s2akit_0.1.0_amd64.deb'
           printf 'dummy appimage' > 'src-tauri/target/release/bundle/appimage/s2akit_0.1.0_amd64.AppImage'
 
-      # 按平台把最终安装包收敛到 dist/：只上传该目录，避免把 target/ 等中间产物带进 Artifacts
+      # 按平台把最终安装包收敛到 ci-dist/：只上传该目录，避免把 target/ 等中间产物带进 Artifacts；
+      # 必须避开 dist/（Vite 前端产物），否则 index.html/assets/ 会混入并导致发布步骤遇到目录失败
       - name: Stage artifacts (windows)
         if: ${{ !env.ACT && matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          New-Item -ItemType Directory -Path ci-dist -Force | Out-Null
           $exe = Get-Item 'src-tauri/target/release/s2akit.exe'
-          $portable = "dist/s2akit_${version}_windows-x64_portable.exe"
+          $portable = "ci-dist/s2akit_${version}_windows-x64_portable.exe"
           Copy-Item $exe.FullName $portable -Force
-          Copy-Item 'src-tauri/target/release/bundle/nsis/*-setup.exe' dist/ -Force
-          Copy-Item 'src-tauri/target/release/bundle/msi/*.msi' dist/ -Force
-          Get-ChildItem 'src-tauri/target/release/bundle' -Recurse -Include '*.sig','*.zip' -File -ErrorAction SilentlyContinue | Copy-Item -Destination dist/ -Force
+          Copy-Item 'src-tauri/target/release/bundle/nsis/*-setup.exe' ci-dist/ -Force
+          Copy-Item 'src-tauri/target/release/bundle/msi/*.msi' ci-dist/ -Force
+          Get-ChildItem 'src-tauri/target/release/bundle' -Recurse -Include '*.sig','*.zip' -File -ErrorAction SilentlyContinue | Copy-Item -Destination ci-dist/ -Force
           Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version"
-          Get-ChildItem dist/
+          Get-ChildItem ci-dist/
 
       - name: Stage artifacts (macos)
         if: ${{ !env.ACT && matrix.os == 'macos-latest' }}
@@ -116,11 +120,11 @@ jobs:
         run: |
           set -euo pipefail
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          mkdir -p dist
-          cp src-tauri/target/release/bundle/dmg/*.dmg dist/
-          cp src-tauri/target/release/bundle/macos/*.tar.gz* dist/ || true
+          mkdir -p ci-dist
+          cp src-tauri/target/release/bundle/dmg/*.dmg ci-dist/
+          cp src-tauri/target/release/bundle/macos/*.tar.gz* ci-dist/ || true
           echo "APP_VERSION=$version" >> "$GITHUB_ENV"
-          ls -la dist/
+          ls -la ci-dist/
 
       - name: Stage artifacts (linux)
         if: ${{ !env.ACT && matrix.os == 'ubuntu-22.04' }}
@@ -128,27 +132,27 @@ jobs:
         run: |
           set -euo pipefail
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          mkdir -p dist
-          cp src-tauri/target/release/bundle/deb/*.deb dist/
-          cp src-tauri/target/release/bundle/appimage/*.AppImage* dist/ || true
-          cp src-tauri/target/release/bundle/rpm/*.rpm dist/ || true
-          find src-tauri/target/release/bundle -name '*.sig' -o -name '*.tar.gz*' | while read -r f; do cp "$f" dist/ || true; done
+          mkdir -p ci-dist
+          cp src-tauri/target/release/bundle/deb/*.deb ci-dist/
+          cp src-tauri/target/release/bundle/appimage/*.AppImage* ci-dist/ || true
+          cp src-tauri/target/release/bundle/rpm/*.rpm ci-dist/ || true
+          find src-tauri/target/release/bundle \( -name '*.sig' -o -name '*.tar.gz*' \) -type f | while read -r f; do cp "$f" ci-dist/ || true; done
           echo "APP_VERSION=$version" >> "$GITHUB_ENV"
-          ls -la dist/
+          ls -la ci-dist/
 
       - name: Stage artifacts (act)
         if: ${{ env.ACT }}
         shell: bash
         run: |
-          mkdir -p dist
-          cp src-tauri/target/release/bundle/nsis/*-setup.exe dist/ || true
-          cp src-tauri/target/release/bundle/msi/*.msi dist/ || true
-          cp src-tauri/target/release/bundle/dmg/*.dmg dist/ || true
-          cp src-tauri/target/release/bundle/macos/*.tar.gz dist/ || true
-          cp src-tauri/target/release/bundle/deb/*.deb dist/ || true
-          cp src-tauri/target/release/bundle/appimage/*.AppImage dist/ || true
-          cp src-tauri/target/release/s2akit.exe "dist/s2akit_0.1.0_${{ matrix.platform }}_portable.exe" || true
-          ls -la dist/
+          mkdir -p ci-dist
+          cp src-tauri/target/release/bundle/nsis/*-setup.exe ci-dist/ || true
+          cp src-tauri/target/release/bundle/msi/*.msi ci-dist/ || true
+          cp src-tauri/target/release/bundle/dmg/*.dmg ci-dist/ || true
+          cp src-tauri/target/release/bundle/macos/*.tar.gz ci-dist/ || true
+          cp src-tauri/target/release/bundle/deb/*.deb ci-dist/ || true
+          cp src-tauri/target/release/bundle/appimage/*.AppImage ci-dist/ || true
+          cp src-tauri/target/release/s2akit.exe "ci-dist/s2akit_0.1.0_${{ matrix.platform }}_portable.exe" || true
+          ls -la ci-dist/
 
       # 短期中转 Artifacts：只给 rolling-release 用，1 天过期；
       # 发布成功后由 rolling-release 主动删除，Actions 存储不累积
@@ -157,7 +161,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bundles-${{ matrix.platform }}
-          path: dist/*
+          path: ci-dist/*
           if-no-files-found: error
           retention-days: 1
           compression-level: 9
@@ -167,7 +171,7 @@ jobs:
         shell: bash
         run: |
           echo "[act] ${{ matrix.platform }} staged files:"
-          ls -la dist/
+          ls -la ci-dist/
 
   # 注意：job 级 if 不支持 env 上下文，ACT 判断只能放在 step 级
   rolling-release:
@@ -212,8 +216,14 @@ jobs:
           - 运行: #${{ github.run_number }}
           - 包含: windows-x64 / macos-aarch64 / linux-x64"
           shopt -s nullglob
-          files=(assets/*)
-          if [ ${#files[@]} -eq 0 ]; then echo 'no assets downloaded' >&2; exit 1; fi
+          # 只收集顶层常规文件：gh release upload 无法上传目录（如前端 dist/assets/ 误混入时产生的 assets/assets），
+          # 遇到目录必须显式报错而不是传给 gh，否则报错只有晦涩的 "read xxx: is a directory"
+          mapfile -t files < <(find assets -maxdepth 1 -type f | sort)
+          if [ ${#files[@]} -eq 0 ]; then echo 'no assets downloaded' >&2; ls -laR assets/; exit 1; fi
+          echo "uploading ${#files[@]} files:"
+          printf '  %s\n' "${files[@]}"
+          subdirs=$(find assets -mindepth 1 -maxdepth 1 -not -type f -print || true)
+          if [ -n "$subdirs" ]; then echo "unexpected subdirectories under assets/, ignored:"; echo "$subdirs"; fi
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --title "$title" --prerelease --target "$sha" --notes "$notes" "${files[@]}"
           else
