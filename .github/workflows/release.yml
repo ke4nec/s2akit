@@ -84,3 +84,27 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      # portable 版只发 Windows：exe 与安装包同名打 zip，解压即用（与 ci 滚动预发布同名规则）
+      - name: Upload portable exe (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $exe = Get-Item "src-tauri/target/${{ matrix.target }}/release/s2akit.exe"
+          $portableName = "s2akit_${version}_windows-x64_portable.exe"
+          $portableZip = "s2akit_${version}_windows-x64_portable.zip"
+          $stage = Join-Path ([System.IO.Path]::GetTempPath()) ("s2akit-portable-" + [Guid]::NewGuid().ToString("N"))
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          try {
+            Copy-Item $exe.FullName (Join-Path $stage $portableName) -Force
+            if (Test-Path $portableZip) { Remove-Item $portableZip -Force }
+            Compress-Archive -Path (Join-Path $stage $portableName) -DestinationPath $portableZip -CompressionLevel Optimal -Force
+          } finally {
+            Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          gh release upload ${{ github.ref_name }} $portableZip --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
