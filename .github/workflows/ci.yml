@@ -1,0 +1,121 @@
+name: ci
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        if: ${{ !env.ACT }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # act 本地模拟时 GITHUB_TOKEN 是假的，跳过缓存服务，只装 Node
+      - name: Setup Node (act)
+        if: ${{ env.ACT }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        if: ${{ !env.ACT }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        if: ${{ !env.ACT }}
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          # 构建失败也保存已编译的依赖，重试时无需从头编译
+          cache-on-failure: true
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Rust tests
+        if: ${{ !env.ACT }}
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Build (tauri)
+        if: ${{ !env.ACT }}
+        run: npm run tauri build
+
+      # act 容器里没有 Rust/MSVC，无法真实编译，用假产物走通后续流程
+      - name: Simulate bundle artifacts (act)
+        if: ${{ env.ACT }}
+        shell: bash
+        run: |
+          mkdir -p src-tauri/target/release/bundle/nsis src-tauri/target/release/bundle/msi src-tauri/target/release
+          printf 'dummy exe' > 'src-tauri/target/release/s2akit.exe'
+          printf 'dummy nsis' > 'src-tauri/target/release/bundle/nsis/s2akit_0.1.0_x64-setup.exe'
+          printf 'dummy msi' > 'src-tauri/target/release/bundle/msi/s2akit_0.1.0_x64_en-US.msi'
+
+      # portable 版：Tauri 已把前端资源嵌进 exe，裸 exe 带 .exe 后缀直接发布，下载即可运行
+      - name: Stage portable exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $exe = Get-Item 'src-tauri/target/release/s2akit.exe'
+          $portable = "s2akit_${version}_windows-x64_portable.exe"
+          Copy-Item $exe.FullName $portable -Force
+          Add-Content -Path $env:GITHUB_ENV -Value "PORTABLE_EXE=$portable"
+          Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version"
+          Write-Host "staged $portable"
+
+      # 滚动 prerelease：每次 push 更新同一个 ci-latest，上传前清空旧资产，存储不累积
+      - name: Upload to rolling release
+        if: ${{ !env.ACT }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'ci-latest'
+          $sha = '${{ github.sha }}'
+          $short = $sha.Substring(0, 7)
+          $title = "s2akit CI build (v$env:APP_VERSION, $short)"
+          $notes = "push 自动构建。`n- commit: $short`n- 分支: ${{ github.ref_name }}`n- 运行: #${{ github.run_number }}"
+          $nsis = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
+          $msi = Get-ChildItem 'src-tauri/target/release/bundle/msi/*.msi' | Select-Object -First 1
+          if (-not $nsis) { throw 'NSIS installer not found' }
+          if (-not $msi) { throw 'MSI installer not found' }
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title $title --prerelease --target $sha --notes $notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            gh release edit $tag --title $title --target $sha --notes $notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            gh release view $tag --json assets --jq '.assets[].name' | Where-Object { $_ } | ForEach-Object {
+              gh release delete-asset $tag $_ --yes
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+          gh release upload $tag "$($nsis.FullName)" "$($msi.FullName)" "$env:PORTABLE_EXE" --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preview release commands (act)
+        if: ${{ env.ACT }}
+        shell: bash
+        run: |
+          echo "[act] would update rolling release 'ci-latest' and upload 3 assets:"
+          echo "[act]   - NSIS setup exe (loose)"
+          echo "[act]   - MSI installer (loose)"
+          echo "[act]   - portable exe: ${PORTABLE_EXE:-<unset>}"
