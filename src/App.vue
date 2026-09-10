@@ -15,6 +15,7 @@ import {
 import AccountsView from "./views/AccountsView.vue";
 import KeysView from "./views/KeysView.vue";
 import SettingsView from "./views/SettingsView.vue";
+import appIconUrl from "../src-tauri/icons/icon.png";
 import TrayMenuApp from "./views/TrayMenuApp.vue";
 import TraySubmenuApp from "./views/TraySubmenuApp.vue";
 
@@ -124,6 +125,22 @@ onBeforeUnmount(() => {
       @mousedown.left="onTitlebarPress"
       @dblclick="onTitlebarDblClick"
     >
+      <!-- 应用图标：悬停看版本号 -->
+      <v-tooltip
+        :text="`s2akit v${store.updater.current || '…'}`"
+        location="bottom"
+        content-class="apple-tip"
+      >
+        <template #activator="{ props }">
+          <img
+            v-bind="props"
+            :src="appIconUrl"
+            alt="s2akit"
+            class="app-icon"
+            draggable="false"
+          />
+        </template>
+      </v-tooltip>
       <!-- macOS 分段控件风格导航 -->
       <div class="seg-tabs" role="tablist">
         <button
@@ -310,11 +327,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 标题栏应用图标：20px 圆角，悬停看版本 */
+.app-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-left: 16px;
+  border-radius: 5px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 /* macOS 分段控件：灰底容器 + 白色活动段 */
 .seg-tabs {
   display: inline-flex;
   gap: 2px;
-  margin-left: 24px;
+  margin-left: 10px;
   padding: 2px;
   border-radius: 9px;
   background: rgba(118, 118, 128, 0.12);
