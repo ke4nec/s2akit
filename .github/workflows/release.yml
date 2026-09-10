@@ -73,6 +73,8 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
+          # 发版上传 Release 资产必需（顶层 permissions 已给 contents:write）
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:

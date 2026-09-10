@@ -454,14 +454,17 @@ pub(crate) fn set_window_alpha_win32(w: &tauri::WebviewWindow, opacity: f32) {
 
 /// 按已保存配置给托盘菜单窗口设置不透明度（每次显示前调用，幂等）
 pub fn apply_menu_opacity(app: &AppHandle) {
-    let opacity = app
-        .state::<AppState>()
-        .config_snapshot()
-        .menu_opacity
-        .clamp(0.3, 1.0);
     if let Some(w) = app.get_webview_window("tray-menu") {
+        // 取值放分支内：非 Windows 下该变量无处消费，会报 unused 警告
         #[cfg(windows)]
-        set_window_alpha_win32(&w, opacity);
+        {
+            let opacity = app
+                .state::<AppState>()
+                .config_snapshot()
+                .menu_opacity
+                .clamp(0.3, 1.0);
+            set_window_alpha_win32(&w, opacity);
+        }
         #[cfg(not(windows))]
         let _ = &w;
     }
