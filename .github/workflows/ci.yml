@@ -54,6 +54,9 @@ jobs:
 
       - name: Build (tauri)
         if: ${{ !env.ACT }}
+        env:
+          # 更新器签名私钥（仓库 Secrets，需与 tauri.conf.json 里 updater.pubkey 配对）
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npm run tauri build
 
       # act 容器里没有 Rust/MSVC，无法真实编译，用假产物走通后续流程
