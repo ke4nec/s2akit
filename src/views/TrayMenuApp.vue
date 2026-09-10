@@ -153,9 +153,48 @@ async function refreshUsage() {
   }
 }
 
+/** 底部进度条保底展示：列表接口太快会导致一闪而过（用量刷新同款问题，同款解法） */
+const LIST_MIN_BAR_MS = 800;
+const loadingBar = ref(false);
+let loadingBarSeq = 0;
+/** 显示底部进度并返回收尾函数，保证至少展示到最小时长；并发重载以最后一次为准 */
+function showLoadingBar(): () => void {
+  const seq = ++loadingBarSeq;
+  const t0 = Date.now();
+  loadingBar.value = true;
+  return () => {
+    if (seq !== loadingBarSeq) return;
+    const wait = LIST_MIN_BAR_MS - (Date.now() - t0);
+    if (wait > 0) {
+      window.setTimeout(() => {
+        if (seq === loadingBarSeq) loadingBar.value = false;
+      }, wait);
+    } else {
+      loadingBar.value = false;
+    }
+  };
+}
+
+/** 用户主动刷新后列表闪一下（与用量刷新同款反馈）；弹出时的后台加载不闪 */
+let flashAfterLoad = false;
+const listFlash = ref(false);
+let listFlashTimer: number | null = null;
+function flashList() {
+  listFlash.value = false;
+  if (listFlashTimer !== null) window.clearTimeout(listFlashTimer);
+  requestAnimationFrame(() => {
+    listFlash.value = true;
+    listFlashTimer = window.setTimeout(() => {
+      listFlash.value = false;
+      listFlashTimer = null;
+    }, 650);
+  });
+}
+
 /** 重新加载菜单数据；refreshUsage=true 绕过后端缓存强制刷新顶部额度 */
 async function reload(refreshUsage = false) {
   closeSubmenu();
+  const doneBar = showLoadingBar();
   loading.value = true;
   // 用量查询与账号列表并行，不阻塞主内容加载
   const usageP = invoke<KeyUsageToday | null>("get_usage_today", {
@@ -176,13 +215,19 @@ async function reload(refreshUsage = false) {
     keyUsage.value = await usageP;
   } finally {
     loading.value = false;
+    doneBar();
     scheduleFit();
+    if (flashAfterLoad) {
+      flashAfterLoad = false;
+      flashList();
+    }
   }
 }
 
-/** key 模式底部刷新：只刷 Key 列表（-loading 转圈复用顶部进度条） */
+/** key 模式底部刷新：只刷 Key 列表 */
 async function refreshKeysList() {
   if (loading.value) return;
+  const doneBar = showLoadingBar();
   loading.value = true;
   try {
     keys.value = await invoke<KeyBrief[]>("list_keys");
@@ -190,12 +235,18 @@ async function refreshKeysList() {
     // 静默
   } finally {
     loading.value = false;
+    doneBar();
     scheduleFit();
+    if (flashAfterLoad) {
+      flashAfterLoad = false;
+      flashList();
+    }
   }
 }
 
 /** 底部刷新按当前模式走 */
 function onRefreshAction() {
+  flashAfterLoad = true;
   if (mode.value === "keys") void refreshKeysList();
   else void reload(true);
 }
@@ -208,6 +259,7 @@ async function pickGroup(g: { id: number; name: string }) {
     hide();
     return;
   }
+  flashAfterLoad = true;
   await reload();
 }
 
@@ -565,8 +617,15 @@ onBeforeUnmount(() => {
         </div>
         <v-divider />
 
-        <div class="tray-list" @scroll="onListScroll">
-          <v-progress-linear v-if="loading || reloadingUsage" indeterminate color="primary" height="2" />
+        <div class="tray-list" :class="{ 'list-flash': listFlash }" @scroll="onListScroll">
+          <v-progress-linear v-if="reloadingUsage" indeterminate color="primary" height="2" />
+          <v-progress-linear
+            v-if="loadingBar"
+            indeterminate
+            color="primary"
+            height="2"
+            class="tray-list-progress-bottom"
+          />
           <template v-if="mode === 'groups'">
             <!-- 首行：当前分组，二级菜单切换分组；余下为该组账号，行为与之前一致 -->
             <v-list density="compact" class="py-0 bg-transparent">
@@ -906,9 +965,22 @@ html.s2a-tray-doc body:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   .spin-icon,
-  .usage-flash {
+  .usage-flash,
+  .list-flash {
     animation: none;
   }
+}
+/* 列表刷新完成闪一下（与用量刷新同款反馈，背景在列表区内） */
+@keyframes list-flash {
+  0% {
+    background: rgba(0, 122, 255, 0.1);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.list-flash {
+  animation: list-flash 0.65s ease-out;
 }
 /* 账号多时只允许账号区域内部滚动，底部操作区固定不被压缩 */
 .tray-actions {
@@ -951,5 +1023,11 @@ html.s2a-tray-doc body:focus-visible {
   left: 0;
   right: 0;
   z-index: 1;
+}
+/* 底部进度条：列表加载时贴着底部分隔线滑动，与顶部用量进度同款。
+   选择器比通用条多一个类，不依赖样式先后顺序也能稳赢 */
+.tray-list > .v-progress-linear.tray-list-progress-bottom {
+  top: auto;
+  bottom: 0;
 }
 </style>
