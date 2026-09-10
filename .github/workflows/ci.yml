@@ -106,8 +106,18 @@ jobs:
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           New-Item -ItemType Directory -Path ci-dist -Force | Out-Null
           $exe = Get-Item 'src-tauri/target/release/s2akit.exe'
-          $portable = "ci-dist/s2akit_${version}_windows-x64_portable.exe"
-          Copy-Item $exe.FullName $portable -Force
+          $portableName = "s2akit_${version}_windows-x64_portable.exe"
+          $portableZip = "ci-dist/s2akit_${version}_windows-x64_portable.zip"
+          # portable 改为 zip 分发：包内 exe 名与原来 portable 同名，解压即用
+          $stage = Join-Path ([System.IO.Path]::GetTempPath()) ("s2akit-portable-" + [Guid]::NewGuid().ToString("N"))
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          try {
+            Copy-Item $exe.FullName (Join-Path $stage $portableName) -Force
+            if (Test-Path $portableZip) { Remove-Item $portableZip -Force }
+            Compress-Archive -Path (Join-Path $stage $portableName) -DestinationPath $portableZip -CompressionLevel Optimal -Force
+          } finally {
+            Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          }
           Copy-Item 'src-tauri/target/release/bundle/nsis/*-setup.exe' ci-dist/ -Force
           Copy-Item 'src-tauri/target/release/bundle/msi/*.msi' ci-dist/ -Force
           Get-ChildItem 'src-tauri/target/release/bundle' -Recurse -Include '*.sig','*.zip' -File -ErrorAction SilentlyContinue | Copy-Item -Destination ci-dist/ -Force
@@ -152,7 +162,19 @@ jobs:
           cp src-tauri/target/release/bundle/macos/*.tar.gz ci-dist/ || true
           cp src-tauri/target/release/bundle/deb/*.deb ci-dist/ || true
           cp src-tauri/target/release/bundle/appimage/*.AppImage ci-dist/ || true
-          cp src-tauri/target/release/s2akit.exe "ci-dist/s2akit_0.1.0_${{ matrix.platform }}_portable.exe" || true
+          # portable 改为 zip 分发：包内 exe 名与原来 portable 同名，解压即用
+          portable_name="s2akit_0.1.0_${{ matrix.platform }}_portable.exe"
+          if [ -f src-tauri/target/release/s2akit.exe ]; then
+            cp src-tauri/target/release/s2akit.exe "/tmp/$portable_name"
+            if command -v zip >/dev/null 2>&1; then
+              rm -f "ci-dist/${portable_name%.exe}.zip"
+              zip -j "ci-dist/${portable_name%.exe}.zip" "/tmp/$portable_name"
+            else
+              PORTABLE_NAME="$portable_name" python3 -c "import os,zipfile; n=os.environ['PORTABLE_NAME']; z=zipfile.ZipFile(f'ci-dist/{n[:-4]}.zip','w',zipfile.ZIP_DEFLATED); z.write(f'/tmp/{n}',n); z.close()"
+            fi
+            rm -f "/tmp/$portable_name"
+            rm -f "ci-dist/$portable_name"
+          fi
           ls -la ci-dist/
 
       # 短期中转 Artifacts：只给 rolling-release 用，1 天过期；
