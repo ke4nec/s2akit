@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+import { initTheme } from "./theme";
 import type {
   AccountBrief,
   AppConfig,
@@ -114,6 +115,8 @@ function applyProgress(p: TestProgress) {
 export async function init() {
   store.updater.current = await getVersion();
   store.config = await invoke<AppConfig>("get_config");
+  // 主题以 config 为权威初始化（注册系统明暗与跨窗口监听）
+  void initTheme(store.config.theme);
   await listen<AccountBrief[]>("accounts-updated", (ev) => {
     store.accounts = ev.payload;
   });

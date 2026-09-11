@@ -3,40 +3,39 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>s2akit · 设置页 · 对齐 v0.2.x 实现</title>
+<title>s2akit · 设置页 · 黑暗模式 · 对齐实现</title>
 <style>
   /* ============================================================
-     s2akit 设置页 · 与代码实现对齐（App.vue / SettingsView / theme.ts）
-     标题栏三标签 + 窗口控制；五个分组：服务 / 测速 / 外观 / 托盘 / 关于
-     单列分组列表 · 左标签右控件 · 1px 行分隔 · 填充式输入（160px）
-     底部「检查更新（tonal）+ 保存」双操作；色板对应 apple.css :root
+     s2akit 设置页 · 黑暗模式 · 与实现 apple.css html.dark 对齐
+     结构与 design/settings.html 完全一致（五分组 + 底部双操作），
+     界面主题选中「暗色」；输入填充 #2A2A2E（比卡面亮一级，实现原值）
      ============================================================ */
   :root {
-    color-scheme: light;
-    --bg: #f2f3f5;
-    --card: #ffffff;
-    --surface-2: #fafbfc;
-    --surface-3: #f0f2f5;
-    --divider: #ebeef5;
-    --border: #e8e8e8;
-    --text-1: #171717;
-    --text-2: #606266;
-    --text-3: #909399;
-    --muted: #737373;
-    --placeholder: #a8abb2;
-    --primary: #007aff;
-    --primary-hover: #4da2ff;
+    color-scheme: dark;
+    --bg: #1b1b1d;
+    --card: #222224;
+    --surface-2: #2a2a2e;
+    --surface-3: #303034;
+    --divider: #38383a;
+    --border: #3d3d40;
+    --text-1: #f2f2f7;
+    --text-2: #b9b9be;
+    --text-3: #949499;
+    --muted: #a6a6ab;
+    --placeholder: #77777c;
+    --primary: #0a84ff;
+    --primary-hover: #64a8ff;
     --primary-active: #0066d6;
-    --sys-green: #34c759;
-    --sys-orange: #ff9500;
-    --sys-red: #ff3b30;
-    --danger-active: #d93025;
-    --glass-bar-bg: rgba(255, 255, 255, 0.8);
-    --seg-fill: rgba(118, 118, 128, 0.12);
-    --seg-fill-strong: rgba(118, 118, 128, 0.2);
-    --fill: #fafbfc;          /* 输入填充（--surface-2） */
-    --fill-hover: #f0f2f5;    /* 输入悬停（--surface-3） */
-    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --sys-green: #30d158;
+    --sys-orange: #ff9f0a;
+    --sys-red: #ff453a;
+    --danger-active: #e5484d;
+    --glass-bar-bg: rgba(30, 30, 32, 0.8);
+    --seg-fill: rgba(118, 118, 128, 0.24);
+    --seg-fill-strong: rgba(118, 118, 128, 0.32);
+    --fill: #2a2a2e;          /* 输入填充（--surface-2，暗色比卡面亮一级） */
+    --fill-hover: #303034;    /* 输入悬停（--surface-3） */
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     --radius-card: 8px;
     --radius-ctrl: 6px;
   }
@@ -46,7 +45,7 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
       "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-    background: #dfe3e9 radial-gradient(circle at 30% 20%, #e9edf2 0%, #d6dbe2 60%);
+    background: #101014 radial-gradient(circle at 30% 20%, #191a1f 0%, #0d0d11 60%);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -63,11 +62,11 @@
     border-radius: 12px;
     overflow: hidden;
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.08),
-      0 24px 60px rgba(31, 35, 41, 0.22);
+      0 0 0 1px rgba(255, 255, 255, 0.07),
+      0 24px 60px rgba(0, 0, 0, 0.6);
   }
 
-  /* 标题栏：图标 + 三标签 + 登录状态 + 窗口控制（App.vue .title-bar） */
+  /* 标题栏：图标 + 三标签 + 登录状态 + 窗口控制 */
   .appbar {
     display: flex;
     align-items: center;
@@ -109,11 +108,12 @@
     transition: color 0.2s, background 0.2s, box-shadow 0.2s;
   }
   .seg-tab:hover { color: var(--text-1); }
+  /* 选中段为卡面色浮起小块（App.vue seg-tab--active = hsl(var(--background))） */
   .seg-tab.active {
     background: var(--card);
     color: var(--text-1);
     font-weight: 600;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
   }
   .seg-tab svg { width: 15px; height: 15px; }
   .appbar .spacer { flex: 1; }
@@ -133,9 +133,9 @@
     height: 8px;
     border-radius: 50%;
     background: var(--sys-green);
-    box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.15);
+    box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.15);
   }
-  .status-dot.off { background: var(--sys-orange); box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.15); }
+  .status-dot.off { background: var(--sys-orange); box-shadow: 0 0 0 3px rgba(255, 159, 10, 0.15); }
   .auth-email {
     min-width: 0;
     overflow: hidden;
@@ -197,7 +197,6 @@
     box-shadow: var(--card-shadow);
   }
 
-  /* 分组头：图标 + 标题（实现无副标题） */
   .group-head {
     display: flex;
     align-items: flex-start;
@@ -212,7 +211,6 @@
   .group-head .icon svg { width: 18px; height: 18px; display: block; }
   .group-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-1); line-height: 1.3; }
 
-  /* 设置行：左标签右控件；标签定宽 190px 保证控件纵向对齐 */
   .row {
     display: flex;
     align-items: center;
@@ -229,7 +227,6 @@
     color: var(--text-1);
     line-height: 1.4;
   }
-  /* 未开放设置项：行级弱化（无额外文案） */
   .row--disabled .row-label { color: var(--muted); }
 
   /* ---------- 控件：填充式输入，统一 160px ---------- */
@@ -253,7 +250,7 @@
   .ctrl-input:focus {
     background: var(--card);
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
   }
   .ctrl-input:disabled {
     background: var(--surface-3);
@@ -262,7 +259,7 @@
   }
   .ctrl-input:disabled:hover { background: var(--surface-3); }
 
-  /* 界面主题三选分段：与标题栏导航同款 macOS 规格 */
+  /* 界面主题三选分段：与标题栏导航同款 */
   .theme-seg {
     display: inline-flex;
     gap: 2px;
@@ -287,10 +284,10 @@
     background: var(--card);
     color: var(--text-1);
     font-weight: 600;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
   }
 
-  /* 滑杆：数值置于轨道上方右侧，与输入框同宽 160px */
+  /* 滑杆：数值置于轨道上方右侧 */
   .slider-wrap {
     display: flex;
     flex-direction: column;
@@ -310,7 +307,7 @@
     width: 160px;
     height: 6px;
     border-radius: 3px;
-    background: linear-gradient(to right, var(--primary) var(--p, 100%), #e8e8e8 var(--p, 100%));
+    background: linear-gradient(to right, var(--primary) var(--p, 100%), var(--divider) var(--p, 100%));
     outline: none;
     cursor: pointer;
   }
@@ -321,7 +318,7 @@
     border-radius: 50%;
     background: #fff;
     border: 2px solid var(--primary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
     transition: transform 0.15s;
   }
   input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
@@ -331,10 +328,9 @@
     border-radius: 50%;
     background: #fff;
     border: 2px solid var(--primary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   }
 
-  /* 关于：版本号文本 */
   .about-version {
     font-size: 13px;
     font-weight: 600;
@@ -370,10 +366,9 @@
   .btn-primary { background: var(--primary); color: #fff; }
   .btn-primary:hover { background: var(--primary-hover); }
   .btn-primary:active { background: var(--primary-active); }
-  .btn-tonal { background: rgba(0, 122, 255, 0.12); color: var(--primary); }
-  .btn-tonal:hover { background: rgba(0, 122, 255, 0.18); }
+  .btn-tonal { background: rgba(10, 132, 255, 0.2); color: var(--primary-hover); }
+  .btn-tonal:hover { background: rgba(10, 132, 255, 0.28); }
 
-  /* 页面底部：更新提示 + 检查更新（tonal）+ 保存（实心）同一行 */
   .save-bar {
     display: flex;
     justify-content: flex-end;
@@ -392,8 +387,8 @@
     width: 1060px;
     max-width: 100%;
     margin-top: 20px;
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
     padding: 14px 18px;
     font-size: 12px;
@@ -404,8 +399,8 @@
   .notes code {
     font-family: "Cascadia Code", Consolas, monospace;
     font-size: 11px;
-    background: rgba(0, 122, 255, 0.08);
-    color: #0066d6;
+    background: rgba(10, 132, 255, 0.14);
+    color: #6cb4ff;
     padding: 0 4px;
     border-radius: 3px;
   }
@@ -414,7 +409,7 @@
 <body>
 
   <div class="window">
-    <!-- 标题栏：应用图标 + 三标签（Group / API Key / 设置）+ 登录状态 + 窗口控制 -->
+    <!-- 标题栏：应用图标 + 三标签 + 登录状态 + 窗口控制 -->
     <header class="appbar">
       <span class="app-icon" title="s2akit v0.2.1">
         <svg viewBox="0 0 24 24" role="img" aria-label="s2akit">
@@ -521,7 +516,7 @@
         </div>
       </section>
 
-      <!-- 分组三：外观（点击即生效并持久化，不进底部保存流程） -->
+      <!-- 分组三：外观（本稿即「暗色」生效态） -->
       <section class="group">
         <header class="group-head">
           <span class="icon">
@@ -533,8 +528,8 @@
           <div class="row-label">界面主题</div>
           <div class="ctrl">
             <div class="theme-seg" role="radiogroup" aria-label="界面主题">
-              <button class="theme-seg-btn active" type="button">亮色</button>
-              <button class="theme-seg-btn" type="button">暗色</button>
+              <button class="theme-seg-btn" type="button">亮色</button>
+              <button class="theme-seg-btn active" type="button">暗色</button>
               <button class="theme-seg-btn" type="button">跟随系统</button>
             </div>
           </div>
@@ -591,12 +586,10 @@
 
   <!-- 设计说明（实现参考，不属于界面本身） -->
   <aside class="notes">
-    <h2>设计说明 · 与 v0.2.x 实现对齐（SettingsView.vue / theme.ts）</h2>
-    标题栏：与账号页同款——三标签 Group / API Key / 设置、登录状态、<b>「界面主题」快捷按钮</b>（半填充对比圆图标，下拉三选、与下方「外观」组同一数据源，点击即生效）、自绘窗口控制（关闭＝隐藏到托盘）。<br />
-    分组：现为<b>五组</b>，组头只有「图标 + 标题」（无说明副标题）——①服务与管理员账号（地址 / 邮箱 / 密码，底部「登录」主按钮）；②测速参数（Prompt / 超时 / 并发——<b>并发行禁用置灰</b>，未开放）；③<b>外观</b>：界面主题三选分段（亮色 / 暗色 / 跟随系统，<b>点击即生效并持久化</b>，不进底部保存流程，走 <code>set_theme</code> 命令并跨窗口同步）；④托盘菜单（不透明度滑杆——<b>数值在轨道上方</b>，拖动防抖 150ms 即时应用；额度刷新间隔）；⑤<b>关于</b>：当前版本 <code>v0.2.1</code>。<br />
-    条件交互（静态稿未画）：<b>二步验证</b>——登录触发 2FA 时，密码行下追加「二步验证码」行（6 位数字输入），「登录」变 tonal 并追加「验证并登录」按钮；登录成功或登出时清理该行。<br />
-    控件：输入框统一 <b>160px 宽</b>填充式（标签定宽 190px 保证纵向对齐），聚焦回升卡面 + 蓝描边 + 12% 光晕；滑杆蓝填充 + 白圆钮，与输入框同宽。<br />
-    底部操作：<b>「检查更新」（tonal 蓝）与「保存」（实心蓝）同一行</b>——检查到新版本弹统一更新对话框（下载进度 / 后台下载 / 立即安装），下载中按钮禁用、就绪后变「立即安装」，左侧可显示状态提示（如「正在下载 v0.3.0…」）。
+    <h2>设计说明 · 黑暗模式（对应 apple.css html.dark 实现值）</h2>
+    结构与亮色稿 <code>settings.html</code> 完全一致（五分组 + 底部「检查更新 / 保存」），界面主题选中<b>「暗色」</b>即本稿生效态；主题由 <code>theme.ts</code> 驱动（<code>html.dark</code> 类 + Vuetify <code>appleDark</code> + <code>color-scheme: dark</code>），可经设置页「外观」组或<b>标题栏「界面主题」快捷按钮</b>（半填充对比圆，<code>currentColor</code> 自动反色）切换，点击即生效并跨窗口同步。<br />
+    中性色阶梯取实现值：画布 <code>#1B1B1D</code> → 卡面 <code>#222224</code> → 输入填充 <code>#2A2A2E</code>（<b>暗色输入填充比卡面亮一级</b>，与亮色「填充暗于卡面」方向相反）→ 悬停/禁用 <code>#303034</code>；聚焦回升卡面 <code>#222224</code> + 蓝描边 <code>#0A84FF</code> + 30% 光晕；分隔线 <code>#38383A</code>、玻璃栏底边 <code>#3D3D40</code>。<br />
+    控件：主题分段选中段＝卡面色浮起（深影）；滑杆蓝色填充 + 白圆钮，未填充轨道用分隔线色 <code>#38383A</code>，数值文字 <code>#0A84FF</code>（实现 <code>hsl(var(--accent))</code> 原值）；tonal 按钮 <code>rgba(10,132,255,0.2)</code> 底 + <code>#64A8FF</code> 文字；实心按钮 <code>#0A84FF</code>，悬停 <code>#64A8FF</code>、按压 <code>#0066D6</code>。条件交互（二步验证行、更新对话框状态文案）与亮色稿说明一致。
   </aside>
 
   <script>

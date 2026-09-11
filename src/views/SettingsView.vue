@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { checkForUpdates, installUpdate, login, saveConfig, store, submit2fa } from "../store";
+import { selectTheme, themeOptions, themeState } from "../theme";
 import type { AppConfig } from "../types";
 
 function defaultConfig(): AppConfig {
@@ -15,6 +16,7 @@ function defaultConfig(): AppConfig {
     test_concurrency: 2,
     menu_opacity: 1,
     usage_refresh_minutes: 10,
+    theme: "light",
   };
 }
 
@@ -187,8 +189,49 @@ function onCheckUpdate() {
       </div>
     </section>
 
-    <!-- 分组三：托盘菜单 -->
+    <!-- 分组三：外观 -->
     <section class="group animate-apple-fade-in apple-delay-2">
+      <header class="group-head">
+        <svg
+          class="theme-mark"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none" />
+        </svg>
+        <div class="group-head-text">
+          <div class="group-title">外观</div>
+        </div>
+      </header>
+      <div class="row">
+        <div class="row-label">界面主题</div>
+        <div class="ctrl">
+          <div class="theme-seg" role="radiogroup" aria-label="界面主题">
+            <button
+              v-for="opt in themeOptions"
+              :key="opt.value"
+              type="button"
+              role="radio"
+              class="theme-seg-btn"
+              :class="{ 'theme-seg-btn--active': themeState.pref === opt.value }"
+              :aria-checked="themeState.pref === opt.value"
+              @click="selectTheme(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 分组四：托盘菜单 -->
+    <section class="group animate-apple-fade-in apple-delay-3">
       <header class="group-head">
         <v-icon icon="mdi-dock-right" size="18" />
         <div class="group-head-text">
@@ -225,7 +268,7 @@ function onCheckUpdate() {
       </div>
     </section>
 
-    <!-- 分组四：关于 -->
+    <!-- 分组五：关于 -->
     <section class="group animate-apple-fade-in apple-delay-3">
       <header class="group-head">
         <v-icon icon="mdi-information" size="18" />
@@ -269,10 +312,10 @@ function onCheckUpdate() {
 }
 
 .group {
-  background: #fff;
-  border: 1px solid #ebeef5;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--divider));
   border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--card-shadow);
 }
 
 .group-head {
@@ -282,6 +325,13 @@ function onCheckUpdate() {
   padding: 16px 20px 14px;
 }
 .group-head > .v-icon {
+  margin-top: 1px;
+  color: hsl(var(--muted-foreground));
+}
+.theme-mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
   margin-top: 1px;
   color: hsl(var(--muted-foreground));
 }
@@ -304,7 +354,7 @@ function onCheckUpdate() {
   padding: 10px 20px;
 }
 .row + .row {
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid hsl(var(--divider));
 }
 .row-label {
   flex: none;
@@ -314,7 +364,7 @@ function onCheckUpdate() {
   line-height: 1.4;
 }
 
-/* 填充式输入：灰底无边框，聚焦白底 + 蓝描边光晕 */
+/* 填充式输入：浅底无边框，聚焦卡面 + 蓝描边光晕 */
 .ctrl {
   flex: none;
 }
@@ -323,7 +373,7 @@ function onCheckUpdate() {
   max-width: 100%;
   height: 34px;
   padding: 0 12px;
-  background: #f5f7fa;
+  background: hsl(var(--surface-2));
   border: 1px solid transparent;
   border-radius: 6px;
   font-family: inherit;
@@ -336,13 +386,13 @@ function onCheckUpdate() {
     box-shadow 0.2s var(--ease-in-out);
 }
 .ctrl-input::placeholder {
-  color: #a8abb2;
+  color: hsl(var(--text-placeholder));
 }
 .ctrl-input:hover {
-  background: #eef1f6;
+  background: hsl(var(--surface-3));
 }
 .ctrl-input:focus {
-  background: #fff;
+  background: hsl(var(--background));
   border-color: hsl(var(--accent));
   box-shadow: 0 0 0 3px hsl(var(--accent) / 0.12);
 }
@@ -351,15 +401,48 @@ function onCheckUpdate() {
 }
 /* 未开放的设置项：输入框禁用态 + 行级弱化（无额外文案） */
 .ctrl-input:disabled {
-  background: #f0f2f5;
-  color: #a8abb2;
+  background: hsl(var(--surface-3));
+  color: hsl(var(--text-placeholder));
   cursor: not-allowed;
 }
 .ctrl-input:disabled:hover {
-  background: #f0f2f5;
+  background: hsl(var(--surface-3));
 }
 .row--disabled .row-label {
   color: hsl(var(--muted-foreground));
+}
+
+/* 主题三选分段控件：与标题栏导航同款 macOS 规格 */
+.theme-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--seg-fill);
+}
+.theme-seg-btn {
+  height: 26px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition:
+    color 0.2s var(--ease-in-out),
+    background 0.2s var(--ease-in-out),
+    box-shadow 0.2s var(--ease-in-out);
+}
+.theme-seg-btn:hover {
+  color: hsl(var(--foreground));
+}
+.theme-seg-btn--active {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+  box-shadow: var(--seg-active-shadow);
 }
 
 /* 滑杆：数值置于轨道上方，省横向宽度；蓝填充轨道 + 白圆钮 */
@@ -376,7 +459,7 @@ function onCheckUpdate() {
   width: 160px;
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, hsl(var(--accent)) var(--p), #e4e7ed var(--p));
+  background: linear-gradient(to right, hsl(var(--accent)) var(--p), hsl(var(--divider)) var(--p));
   outline: none;
   cursor: pointer;
 }
@@ -419,7 +502,7 @@ function onCheckUpdate() {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 20px 16px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid hsl(var(--divider));
 }
 .group-foot .v-btn,
 .save-bar .v-btn {

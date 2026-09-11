@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { initTheme } from "../theme";
 import type { AccountBrief, AppConfig, KeyBrief, KeyUsageToday, TestResult } from "../types";
 
 const accounts = ref<AccountBrief[]>([]);
@@ -456,6 +457,10 @@ onMounted(async () => {
   document.documentElement.classList.add("s2a-tray-doc");
   document.documentElement.style.background = "transparent";
   document.body.style.background = "transparent";
+  // 托盘窗口不跑 store.init()，主题按配置自行初始化（含系统明暗/跨窗口监听）
+  invoke<AppConfig>("get_config")
+    .then((cfg) => void initTheme(cfg.theme))
+    .catch(() => {});
   unlistens.push(
     await listen("tray-menu-shown", () => {
       void invoke("menu_pong");
@@ -665,7 +670,8 @@ onBeforeUnmount(() => {
               <template #prepend>
                 <v-icon
                   :icon="a.schedulable ? 'mdi-circle' : 'mdi-circle-outline'"
-                  :color="a.schedulable ? 'success' : '#C7C7CC'"
+                  :color="a.schedulable ? 'success' : undefined"
+                  :style="{ color: a.schedulable ? undefined : 'hsl(var(--off-graphic))' }"
                   size="9"
                 />
               </template>
@@ -951,10 +957,18 @@ html.s2a-tray-doc body:focus-visible {
 .spin-icon {
   animation: usage-spin 0.9s linear infinite;
 }
-/* 到值后：蓝色辉光闪一下，明确“已更新为即时值” */
+/* 到值后：蓝色辉光闪一下，明确“已更新为即时值”（暗色下换更亮的系统蓝） */
+html.s2a-tray-doc {
+  --flash-strong: rgba(0, 122, 255, 0.16);
+  --flash-soft: rgba(0, 122, 255, 0.1);
+}
+html.s2a-tray-doc.dark {
+  --flash-strong: rgba(10, 132, 255, 0.24);
+  --flash-soft: rgba(10, 132, 255, 0.16);
+}
 @keyframes usage-flash {
   0% {
-    background: rgba(0, 122, 255, 0.16);
+    background: var(--flash-strong);
   }
   100% {
     background: transparent;
@@ -973,7 +987,7 @@ html.s2a-tray-doc body:focus-visible {
 /* 列表刷新完成闪一下（与用量刷新同款反馈，背景在列表区内） */
 @keyframes list-flash {
   0% {
-    background: rgba(0, 122, 255, 0.1);
+    background: var(--flash-soft);
   }
   100% {
     background: transparent;
@@ -1029,5 +1043,47 @@ html.s2a-tray-doc body:focus-visible {
 .tray-list > .v-progress-linear.tray-list-progress-bottom {
   top: auto;
   bottom: 0;
+}
+
+/* ---------- 暗色主题：卡片/分段/文字整套换 Apple 深色（html.dark 由主题切换注入）；
+   acrylic 玻璃底色由 Rust 侧 set_effects 同步切换，此处只管网页层 ---------- */
+html.s2a-tray-doc.dark .tray-menu-card {
+  background: rgba(30, 30, 32, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+html.s2a-tray-doc.dark .submenu-hint {
+  color: rgba(255, 255, 255, 0.3);
+}
+html.s2a-tray-doc.dark .v-list-item:hover .submenu-hint,
+html.s2a-tray-doc.dark .v-list-item--active .submenu-hint {
+  color: rgba(255, 255, 255, 0.55);
+}
+html.s2a-tray-doc.dark .tray-menu-card .v-divider {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html.s2a-tray-doc.dark .mode-seg {
+  background: rgba(118, 118, 128, 0.26);
+}
+html.s2a-tray-doc.dark .mode-seg-btn {
+  color: rgba(255, 255, 255, 0.6);
+}
+html.s2a-tray-doc.dark .mode-seg-btn--active {
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+html.s2a-tray-doc.dark .usage-stats {
+  color: rgba(255, 255, 255, 0.55);
+}
+html.s2a-tray-doc.dark .usage-stats:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+html.s2a-tray-doc.dark .tray-list .v-list-item .v-list-item-title,
+html.s2a-tray-doc.dark .tray-actions .v-list-item .v-list-item-title {
+  color: rgba(255, 255, 255, 0.92);
+}
+html.s2a-tray-doc.dark .tray-actions .v-list-item .v-icon {
+  color: rgba(255, 255, 255, 0.55);
 }
 </style>

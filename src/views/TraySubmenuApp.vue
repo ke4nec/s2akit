@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
+import { initTheme } from "../theme";
 import type { AccountBrief, AppConfig, KeyBrief, ModelBrief, TestResult } from "../types";
 
 /**
@@ -421,6 +422,10 @@ onMounted(async () => {
   document.documentElement.classList.add("s2a-tray-doc");
   document.documentElement.style.background = "transparent";
   document.body.style.background = "transparent";
+  // 子菜单窗口不跑 store.init()，主题按配置自行初始化（含系统明暗/跨窗口监听）
+  invoke<AppConfig>("get_config")
+    .then((cfg) => void initTheme(cfg.theme))
+    .catch(() => {});
   unlistens.push(
     await listen<{ kind: string; id: number }>("submenu-open", (e) => {
       if (e.payload.kind === "key") void loadKey(e.payload.id);
@@ -766,5 +771,30 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- 暗色主题：与主菜单同一套 Apple 深色覆盖（html.dark 由主题切换注入）；
+   acrylic 玻璃底色由 Rust 侧 set_effects 同步切换，此处只管网页层 ---------- */
+html.s2a-tray-doc.dark .submenu-card {
+  background: rgba(30, 30, 32, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+html.s2a-tray-doc.dark .submenu-card .v-list-item .v-list-item-title {
+  color: rgba(255, 255, 255, 0.92);
+}
+html.s2a-tray-doc.dark .submenu-card .v-divider {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html.s2a-tray-doc.dark .submenu-hint {
+  color: rgba(255, 255, 255, 0.3);
+}
+html.s2a-tray-doc.dark .v-list-item:hover .submenu-hint,
+html.s2a-tray-doc.dark .v-list-item--active .submenu-hint {
+  color: rgba(255, 255, 255, 0.55);
+}
+html.s2a-tray-doc.dark .submenu-models {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 </style>

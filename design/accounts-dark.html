@@ -3,54 +3,54 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>s2akit · 主页面（Group 账号页）· 对齐 v0.2.x 实现</title>
+<title>s2akit · 主页面（Group 账号页）· 黑暗模式 · 对齐实现</title>
 <style>
   /* ============================================================
-     s2akit 主页面（Group 账号页）· 与代码实现对齐（App.vue / AccountsView / tables.css）
-     标题栏：应用图标 + 三标签 Group / API Key / 设置 + 登录状态 + 自绘窗口控制
-     卡片：白卡表格 · 行首 3px 状态竖条 · 4px 圆角徽标 · 分组胶囊与刷新在卡片头
-     色板逐项对应 apple.css :root（HSL 值换算为 hex）
+     s2akit 主页面（Group 账号页）· 黑暗模式 · 与实现 apple.css html.dark 对齐
+     结构与 design/accounts.html 完全一致（三标签顶栏 + 卡片表格），
+     仅替换为实现的暗色 token：画布 #1B1B1D · 卡面 #222224 · 蓝 #0A84FF ·
+     小字语义色用系统亮版（绿 #47D76B / 橙 #FFAD33 / 红 #FF5A52）
      ============================================================ */
   :root {
-    color-scheme: light;
-    /* 中性色：对应 apple.css :root（--canvas/--background/--divider…） */
-    --bg: #f2f3f5;            /* --canvas 画布 */
-    --card: #ffffff;          /* --background 卡面 */
-    --surface-2: #fafbfc;     /* --surface-2 汇总条 / 分页条底 */
-    --surface-3: #f0f2f5;     /* --surface-3 hover / 禁用底 */
-    --divider: #ebeef5;       /* --divider 卡片描边 / 组分隔 */
-    --border: #e8e8e8;        /* --border 弹层描边 */
-    --row-divider: #f2f3f5;   /* --row-divider 行分隔 */
-    --row-hover: #f5f7fa;     /* --row-hover 行悬停 */
-    --text-1: #171717;        /* --foreground */
-    --text-2: #606266;        /* --text-secondary */
-    --text-3: #909399;        /* --text-tertiary */
-    --muted: #737373;         /* --muted-foreground（停用徽标文字） */
-    /* 强调与系统色（main.ts appleLight 主题原值） */
-    --primary: #007aff;
-    --primary-hover: #4da2ff;   /* primary-lighten-1 */
+    color-scheme: dark;
+    /* 中性色：对应 apple.css html.dark（--canvas/--background/--divider…） */
+    --bg: #1b1b1d;            /* --canvas */
+    --card: #222224;          /* --background 卡面（比画布亮＝抬升） */
+    --surface-2: #2a2a2e;     /* --surface-2 汇总条 / 分页条底 */
+    --surface-3: #303034;     /* --surface-3 hover / 禁用底 */
+    --divider: #38383a;       /* --divider */
+    --border: #3d3d40;        /* --border 玻璃栏底边 / 弹层描边 */
+    --row-divider: #2e2e30;   /* --row-divider 行分隔 */
+    --row-hover: #29292b;     /* --row-hover 行悬停 */
+    --text-1: #f2f2f7;        /* --foreground */
+    --text-2: #b9b9be;        /* --text-secondary */
+    --text-3: #949499;        /* --text-tertiary */
+    --muted: #a6a6ab;         /* --muted-foreground（停用徽标文字） */
+    /* 强调与系统色（theme.ts appleDark 主题原值） */
+    --primary: #0a84ff;
+    --primary-hover: #64a8ff;   /* primary-lighten-1 */
     --primary-active: #0066d6;  /* primary-darken-1 */
-    --sys-green: #34c759;
-    --sys-green-hover: #2db94e; /* --system-success-hover */
-    --sys-orange: #ff9500;
-    --sys-red: #ff3b30;
-    --sys-gray: #8e8e93;        /* --system-gray */
-    --off-graphic: #c7c7cc;     /* --off-graphic 停用竖条 / 占位符图形 */
-    --danger-active: #d93025;   /* --danger-active 关闭按钮按压 */
-    /* 文本态语义色：小字 HIG 加深版（同 tables.css .s2a-text-*） */
-    --success: #248a3d;  --success-bg: rgba(52, 199, 89, 0.13);
-    --warning: #c55300;  --warning-bg: rgba(255, 149, 0, 0.14);
-    --danger: #ff3b30;   --danger-bg: rgba(255, 59, 48, 0.12);
-    --info: #737373;     --info-bg: rgba(142, 142, 147, 0.14);
-    /* 复合色（apple.css 原值） */
-    --glass-bar-bg: rgba(255, 255, 255, 0.8);
-    --seg-fill: rgba(118, 118, 128, 0.12);
-    --seg-fill-strong: rgba(118, 118, 128, 0.2);
-    --switch-track: rgba(120, 120, 128, 0.32);
-    --switch-track-hover: rgba(120, 120, 128, 0.44);
-    --skeleton-base: rgba(0, 0, 0, 0.06);
-    --skeleton-hi: rgba(0, 0, 0, 0.12);
-    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --sys-green: #30d158;
+    --sys-green-hover: #2db94e;
+    --sys-orange: #ff9f0a;
+    --sys-red: #ff453a;
+    --sys-gray: #98989d;
+    --off-graphic: #48484a;
+    --danger-active: #e5484d;
+    /* 文本态语义色：暗色小字用系统亮版（apple.css html.dark --status-*） */
+    --success: #47d76b;  --success-bg: rgba(48, 209, 88, 0.13);
+    --warning: #ffad33;  --warning-bg: rgba(255, 159, 10, 0.14);
+    --danger: #ff5a52;   --danger-bg: rgba(255, 69, 58, 0.12);
+    --info: #a6a6ab;     --info-bg: rgba(152, 152, 157, 0.14);
+    /* 复合色（apple.css html.dark 原值） */
+    --glass-bar-bg: rgba(30, 30, 32, 0.8);
+    --seg-fill: rgba(118, 118, 128, 0.24);
+    --seg-fill-strong: rgba(118, 118, 128, 0.32);
+    --switch-track: rgba(120, 120, 128, 0.42);
+    --switch-track-hover: rgba(120, 120, 128, 0.54);
+    --skeleton-base: rgba(255, 255, 255, 0.07);
+    --skeleton-hi: rgba(255, 255, 255, 0.14);
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     --radius-card: 8px;
     --radius-ctrl: 6px;
   }
@@ -60,7 +60,7 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
       "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-    background: #dfe3e9 radial-gradient(circle at 30% 20%, #e9edf2 0%, #d6dbe2 60%);
+    background: #101014 radial-gradient(circle at 30% 20%, #191a1f 0%, #0d0d11 60%);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -69,7 +69,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* ---------- 应用窗口外壳（展示语境；实现为 Tauri 无边框自绘标题栏） ---------- */
+  /* ---------- 应用窗口外壳（展示语境） ---------- */
   .window {
     width: 1060px;
     max-width: 100%;
@@ -77,8 +77,8 @@
     border-radius: 12px;
     overflow: hidden;
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.08),
-      0 24px 60px rgba(31, 35, 41, 0.22);
+      0 0 0 1px rgba(255, 255, 255, 0.07),
+      0 24px 60px rgba(0, 0, 0, 0.6);
   }
 
   /* 标题栏：图标 + 三标签 + 登录状态 + 窗口控制（App.vue .title-bar） */
@@ -123,16 +123,17 @@
     transition: color 0.2s, background 0.2s, box-shadow 0.2s;
   }
   .seg-tab:hover { color: var(--text-1); }
+  /* 选中段为卡面色的浮起小块（App.vue seg-tab--active = hsl(var(--background))） */
   .seg-tab.active {
     background: var(--card);
     color: var(--text-1);
     font-weight: 600;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
   }
   .seg-tab svg { width: 15px; height: 15px; }
   .appbar .spacer { flex: 1; }
 
-  /* 登录状态：状态点 + 邮箱（截断，悬停看完整邮箱；未登录＝橙点 +「未登录」） */
+  /* 登录状态：绿点＝已登录 / 橙点＝未登录 */
   .auth-status {
     display: flex;
     align-items: center;
@@ -148,9 +149,9 @@
     height: 8px;
     border-radius: 50%;
     background: var(--sys-green);
-    box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.15);
+    box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.15);
   }
-  .status-dot.off { background: var(--sys-orange); box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.15); }
+  .status-dot.off { background: var(--sys-orange); box-shadow: 0 0 0 3px rgba(255, 159, 10, 0.15); }
   .auth-email {
     min-width: 0;
     overflow: hidden;
@@ -158,7 +159,7 @@
     white-space: nowrap;
   }
 
-  /* 自绘窗口控制：30px 圆角方块；关闭悬停 Apple 红、点击隐藏到托盘 */
+  /* 自绘窗口控制：关闭悬停 Apple 红 */
   .win-controls { display: flex; align-items: center; gap: 6px; }
   .win-btn {
     display: inline-flex;
@@ -193,7 +194,7 @@
     overflow: hidden;
   }
 
-  /* 卡片头：左状态计数 + 右「Group」胶囊与刷新（AccountsView .s2a-summary） */
+  /* 卡片头：左状态计数 + 右「Group」胶囊与刷新 */
   .summary {
     display: flex;
     align-items: center;
@@ -222,7 +223,6 @@
     min-width: 0;
   }
 
-  /* 分组胶囊：文案固定 Group（对齐托盘菜单用词），悬停显示当前分组 */
   .group-pop {
     display: inline-flex;
     align-items: center;
@@ -236,7 +236,7 @@
     font-size: 12px;
     font-weight: 500;
     letter-spacing: -0.01em;
-    color: rgba(23, 23, 23, 0.78);
+    color: rgba(242, 242, 247, 0.78);
     cursor: pointer;
     white-space: nowrap;
     transition: background 0.15s;
@@ -248,7 +248,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .group-pop svg { flex: none; width: 15px; height: 15px; color: rgba(23, 23, 23, 0.4); }
+  .group-pop svg { flex: none; width: 15px; height: 15px; color: rgba(242, 242, 247, 0.4); }
 
   .icon-btn {
     display: inline-flex;
@@ -293,7 +293,6 @@
   th.th-active {
     color: var(--text-2);
   }
-  /* Apple 风排序指示：成对 8×5px 小 chevron，当前方向点亮（上＝升序、下＝降序） */
   .si {
     display: inline-flex;
     flex-direction: column;
@@ -321,7 +320,6 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: var(--row-hover); }
 
-  /* 行首状态竖条：错误 > 限流/临时 > 正常 > 停用 */
   .bar {
     position: absolute;
     left: 0;
@@ -355,7 +353,6 @@
     white-space: nowrap;
   }
 
-  /* 状态徽标：正常绿 / 错误红 / 其余灰（statusBadgeClass） */
   .tag {
     display: inline-flex;
     align-items: center;
@@ -373,7 +370,6 @@
   .tag-warning { background: var(--warning-bg); color: var(--warning); }
   .tag-off     { background: var(--info-bg);    color: var(--muted); }
 
-  /* 调度列：iOS 风迷你开关（32×20）+ 限流/临时小徽标 */
   .sw-wrap {
     display: flex;
     align-items: center;
@@ -400,7 +396,7 @@
     height: 16px;
     border-radius: 50%;
     background: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .sw:hover:not(:disabled) { background: var(--switch-track-hover); }
@@ -409,11 +405,10 @@
   .sw.on:hover:not(:disabled) { background: var(--sys-green-hover); }
   .sw:disabled { opacity: 0.45; cursor: default; }
   .sw:focus-visible {
-    outline: 2px solid rgba(0, 122, 255, 0.45);
+    outline: 2px solid rgba(10, 132, 255, 0.45);
     outline-offset: 1px;
   }
 
-  /* 数字列：13px 半粗 + 等宽数字，按阈值着色（<2s 绿 / <5s 橙 / 其余红） */
   .num {
     font-size: 13px;
     font-weight: 600;
@@ -426,7 +421,6 @@
   .num.mid { color: var(--warning); }
   .num.bad { color: var(--danger); }
   .num-none { font-size: 13px; color: var(--off-graphic); }
-  /* 测试失败：close-circle 红色图标（替代文字 ✕） */
   .num-fail {
     display: inline-flex;
     color: var(--sys-red);
@@ -434,7 +428,6 @@
   }
   .num-fail svg { width: 15px; height: 15px; }
 
-  /* 测试中：灰色横线 shimmer 骨架 */
   .sk {
     display: inline-block;
     width: 56px;
@@ -457,7 +450,6 @@
     .sk { animation: none; }
   }
 
-  /* 备注列 */
   .note {
     display: block;
     font-size: 12px;
@@ -470,7 +462,6 @@
   .note.err { color: var(--danger); }
   .note.none { color: var(--off-graphic); }
 
-  /* 操作列：测试 + 选择模型测试（file-tree 图标） */
   .c-act { text-align: right; white-space: nowrap; }
   .act {
     display: inline-flex;
@@ -565,8 +556,8 @@
     width: 1060px;
     max-width: 100%;
     margin-top: 20px;
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
     padding: 14px 18px;
     font-size: 12px;
@@ -577,8 +568,8 @@
   .notes code {
     font-family: "Cascadia Code", Consolas, monospace;
     font-size: 11px;
-    background: rgba(0, 122, 255, 0.08);
-    color: #0066d6;
+    background: rgba(10, 132, 255, 0.14);
+    color: #6cb4ff;
     padding: 0 4px;
     border-radius: 3px;
   }
@@ -909,12 +900,11 @@
 
   <!-- 设计说明（实现参考，不属于界面本身） -->
   <aside class="notes">
-    <h2>设计说明 · 与 v0.2.x 实现对齐（App.vue / AccountsView / tables.css）</h2>
-    标题栏：<b>三标签 Group / API Key / 设置</b>（MDI 图标，前两个沿用英文文案）；左上角 20px 应用图标（透明底橙青双环，悬停显示版本号）；右侧<b>登录状态</b>（绿点＝已登录；未登录＝橙点 +「未登录」，邮箱截断、悬停看全文）与<b>自绘窗口控制</b> 30px 圆角方块（最小化 / 最大化 / 关闭；关闭悬停 <code>#FF3B30</code>、按压 <code>#D93025</code>，点击<b>隐藏到托盘</b>）；两者之间为<b>「界面主题」快捷按钮</b>——28px 图标钮、半填充对比圆图标（描边圆 + 右半实心），点击下拉 亮色 / 暗色 / 跟随系统 三选（当前项打勾，样式同 v-menu 弹层），选择即生效并跨窗口同步，与设置页「外观」组同一数据源；空白区域按住可拖动窗口、双击最大化。<b>分组胶囊与刷新按钮已从顶栏移入账号页卡片头</b>。<br />
-    卡片头：左侧状态计数（正常 / 限流·临时 / 错误 / 停用）；右侧「<b>Group</b>」胶囊——按钮文案固定 Group（对齐托盘菜单用词），悬停提示显示当前分组，下拉列表带选中勾；旁边为刷新按钮（加载时转圈）。<b>未登录时整卡不显示</b>，替换为提示条「请先在设置页填写 sub2api 地址与管理员账号并登录」＋「前往设置」按钮（v-alert tonal）。<br />
-    表格：列宽 216/84/132/104/96/自适应/150；行首 3px 状态竖条（错误红 <code>#FF3B30</code> ＞ 限流/临时橙 <code>#FF9500</code> ＞ 正常绿 <code>#34C759</code> ＞ 停用灰 <code>#C7C7CC</code>）；状态徽标只有三种——<b>正常绿 / 错误红 / 其余灰</b>（停用为灰 tint 底 + <code>#737373</code> 文字）；调度列为 iOS 风开关＋限流/临时小徽标；<b>首 token 失败显示 close-circle 红色图标</b>（非文字 ✕）；备注列悬停看完整错误；行悬停 <code>#F5F7FA</code>。<br />
-    操作与菜单：「测试」＋「选择模型测试」（<b>file-tree 图标</b>，弹模型选择对话框）；<b>行右键</b>快捷菜单：选择模型测试（悬停约 220ms 展开级联子菜单，贴边翻转）／禁用（启用）该账号。分页：默认每页 10（选项 10/20/50/100），页数 ≤7 全量、＞7 收敛为首页/尾页/当前±1 加省略号；空列表整条隐藏。<br />
-    色板：逐项对应 <code>apple.css</code> <code>:root</code>（画布 <code>#F2F3F5</code>、卡面 <code>#FFFFFF</code>、汇总/分页条 <code>#FAFBFC</code>、行分隔 <code>#F2F3F5</code>、卡片描边 <code>#EBEEF5</code>）；小字语义色用 HIG 加深版（绿 <code>#248A3D</code>、橙 <code>#C55300</code>），图形元素（竖条/圆点/开关/图标）用标准系统色；暗色版见 <code>accounts-dark.html</code>（对应 <code>html.dark</code>）。
+    <h2>设计说明 · 黑暗模式（对应 apple.css html.dark 实现值）</h2>
+    结构与亮色稿 <code>accounts.html</code> 完全一致，本稿只替换色板，且<b>逐项取自实现</b>（<code>theme.ts</code> <code>appleDark</code> 主题 + <code>apple.css</code> <code>html.dark</code> 变量），主题切换由设置页「外观 → 界面主题」或<b>标题栏「界面主题」快捷按钮</b>驱动（亮色 / 暗色 / 跟随系统，<code>color-scheme</code> 同步暗色让原生控件跟随）；快捷按钮图标用 <code>currentColor</code>，明暗两态自动反色。<br />
+    中性色阶梯：画布 <code>#1B1B1D</code> → 卡面 <code>#222224</code>（抬升）→ 汇总/分页条 <code>#2A2A2E</code> → hover/禁用 <code>#303034</code>；分隔：卡片描边 <code>#38383A</code>、行分隔 <code>#2E2E30</code>、行悬停 <code>#29292B</code>、玻璃栏底边 <code>#3D3D40</code>；文字：主 <code>#F2F2F7</code> / 次 <code>#B9B9BE</code> / 弱 <code>#949499</code>。<br />
+    语义色：图形元素（竖条/圆点/开关/图标/当前页）用 Apple 暗色系统色——蓝 <code>#0A84FF</code>、绿 <code>#30D158</code>、橙 <code>#FF9F0A</code>、红 <code>#FF453A</code>、灰 <code>#98989D</code>；<b>小字语义色在系统色基础上再提亮</b>（绿 <code>#47D76B</code>、橙 <code>#FFAD33</code>、红 <code>#FF5A52</code>，对应 <code>--status-*</code>），保证 12px 小字对比度；徽标 tint 底透明度与亮色一致（13/14/12%），停用徽标灰底 + <code>#A6A6AB</code> 文字。<br />
+    控件状态：分段选中段＝卡面色 <code>#222224</code> 浮起（深影 <code>rgba(0,0,0,0.45)</code>）；开关轨 <code>rgba(120,120,128,0.42)</code>、悬停 0.54，白钮投影加深；关闭按钮悬停 <code>#FF453A</code>、按压 <code>#E5484D</code>；骨架 shimmer 改白色透明度（7%→14%）；卡片投影 <code>rgba(0,0,0,0.3)</code>；应用图标透明底双环直接融入深色顶栏。
   </aside>
 
 </body>

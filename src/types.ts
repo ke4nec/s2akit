@@ -9,6 +9,8 @@ export interface AppConfig {
   menu_opacity: number;
   /** 托盘菜单顶部用量刷新间隔（分钟），默认 10，范围 1-1440 */
   usage_refresh_minutes: number;
+  /** 界面主题："light" | "dark" | "system"（跟随系统），默认 "light" */
+  theme: string;
   /** Rust 侧维护（账号上次测试模型，account_id -> model_id），前端只读 */
   last_models?: Record<string, string>;
 }

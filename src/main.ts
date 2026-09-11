@@ -6,45 +6,19 @@ import "./styles/tables.css";
 import { createVuetify } from "vuetify";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App.vue";
+import { appleThemeOptions, bindVuetifyTheme } from "./theme";
 
-// Apple-Class 主题：灰白画布 (#F2F3F5) + 白卡片 + 深炭灰文字 + Apple 蓝 (#007AFF) 唯一强调色，
-// 语义色取自 Apple 系统色板（绿/橙/红）
+// Apple-Class 双主题：亮 = 灰白画布 (#F2F3F5) + 白卡片 + Apple 蓝 (#007AFF)；
+// 暗 = Apple 深色系统色（画布 #1A1A1C + 卡片 #242426 + 蓝 #0A84FF）。
+// 主题配置与切换逻辑集中在 theme.ts，装配后把实例回填给它
 const vuetify = createVuetify({
-  theme: {
-    defaultTheme: "appleLight",
-    themes: {
-      appleLight: {
-        dark: false,
-        colors: {
-          background: "#F2F3F5",
-          surface: "#FFFFFF",
-          "surface-variant": "#F5F5F7",
-          "on-surface": "#1D1D1F",
-          "on-surface-variant": "#6E6E73",
-          primary: "#007AFF",
-          "on-primary": "#FFFFFF",
-          "primary-darken-1": "#0066D6",
-          "primary-lighten-1": "#4DA2FF",
-          secondary: "#F5F5F7",
-          "on-secondary": "#1D1D1F",
-          success: "#34C759",
-          "on-success": "#FFFFFF",
-          warning: "#FF9500",
-          "on-warning": "#FFFFFF",
-          error: "#FF3B30",
-          "on-error": "#FFFFFF",
-          info: "#007AFF",
-          "on-info": "#FFFFFF",
-          grey: "#8E8E93",
-        },
-      },
-    },
-  },
+  theme: appleThemeOptions,
   defaults: {
     VTextField: { variant: "outlined" },
     VSelect: { variant: "outlined" },
   },
 });
+bindVuetifyTheme(vuetify.theme);
 
 const app = createApp(App);
 app.use(vuetify);

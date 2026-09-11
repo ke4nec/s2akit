@@ -3,46 +3,40 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>s2akit · 主页面（Group 账号页）· 对齐 v0.2.x 实现</title>
+<title>s2akit · API Key 页 · 对齐 v0.2.x 实现</title>
 <style>
   /* ============================================================
-     s2akit 主页面（Group 账号页）· 与代码实现对齐（App.vue / AccountsView / tables.css）
-     标题栏：应用图标 + 三标签 Group / API Key / 设置 + 登录状态 + 自绘窗口控制
-     卡片：白卡表格 · 行首 3px 状态竖条 · 4px 圆角徽标 · 分组胶囊与刷新在卡片头
-     色板逐项对应 apple.css :root（HSL 值换算为 hex）
+     s2akit API Key 页 · 与代码实现对齐（App.vue / KeysView / tables.css）
+     与账号页同源表格体系；差异：卡片头仅 正常/停用 计数 + 刷新（无分组胶囊）、
+     行状态仅 启用/停用 两态、新增「用量」列（今日费用 + 次数 · tokens）
      ============================================================ */
   :root {
     color-scheme: light;
-    /* 中性色：对应 apple.css :root（--canvas/--background/--divider…） */
-    --bg: #f2f3f5;            /* --canvas 画布 */
-    --card: #ffffff;          /* --background 卡面 */
-    --surface-2: #fafbfc;     /* --surface-2 汇总条 / 分页条底 */
-    --surface-3: #f0f2f5;     /* --surface-3 hover / 禁用底 */
-    --divider: #ebeef5;       /* --divider 卡片描边 / 组分隔 */
-    --border: #e8e8e8;        /* --border 弹层描边 */
-    --row-divider: #f2f3f5;   /* --row-divider 行分隔 */
-    --row-hover: #f5f7fa;     /* --row-hover 行悬停 */
-    --text-1: #171717;        /* --foreground */
-    --text-2: #606266;        /* --text-secondary */
-    --text-3: #909399;        /* --text-tertiary */
-    --muted: #737373;         /* --muted-foreground（停用徽标文字） */
-    /* 强调与系统色（main.ts appleLight 主题原值） */
+    --bg: #f2f3f5;
+    --card: #ffffff;
+    --surface-2: #fafbfc;
+    --surface-3: #f0f2f5;
+    --divider: #ebeef5;
+    --border: #e8e8e8;
+    --row-divider: #f2f3f5;
+    --row-hover: #f5f7fa;
+    --text-1: #171717;
+    --text-2: #606266;
+    --text-3: #909399;
+    --muted: #737373;
     --primary: #007aff;
-    --primary-hover: #4da2ff;   /* primary-lighten-1 */
-    --primary-active: #0066d6;  /* primary-darken-1 */
+    --primary-hover: #4da2ff;
+    --primary-active: #0066d6;
     --sys-green: #34c759;
-    --sys-green-hover: #2db94e; /* --system-success-hover */
+    --sys-green-hover: #2db94e;
     --sys-orange: #ff9500;
     --sys-red: #ff3b30;
-    --sys-gray: #8e8e93;        /* --system-gray */
-    --off-graphic: #c7c7cc;     /* --off-graphic 停用竖条 / 占位符图形 */
-    --danger-active: #d93025;   /* --danger-active 关闭按钮按压 */
-    /* 文本态语义色：小字 HIG 加深版（同 tables.css .s2a-text-*） */
+    --sys-gray: #8e8e93;
+    --off-graphic: #c7c7cc;
+    --danger-active: #d93025;
     --success: #248a3d;  --success-bg: rgba(52, 199, 89, 0.13);
-    --warning: #c55300;  --warning-bg: rgba(255, 149, 0, 0.14);
     --danger: #ff3b30;   --danger-bg: rgba(255, 59, 48, 0.12);
     --info: #737373;     --info-bg: rgba(142, 142, 147, 0.14);
-    /* 复合色（apple.css 原值） */
     --glass-bar-bg: rgba(255, 255, 255, 0.8);
     --seg-fill: rgba(118, 118, 128, 0.12);
     --seg-fill-strong: rgba(118, 118, 128, 0.2);
@@ -69,7 +63,6 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* ---------- 应用窗口外壳（展示语境；实现为 Tauri 无边框自绘标题栏） ---------- */
   .window {
     width: 1060px;
     max-width: 100%;
@@ -81,7 +74,7 @@
       0 24px 60px rgba(31, 35, 41, 0.22);
   }
 
-  /* 标题栏：图标 + 三标签 + 登录状态 + 窗口控制（App.vue .title-bar） */
+  /* 标题栏：API Key 标签激活 */
   .appbar {
     display: flex;
     align-items: center;
@@ -132,7 +125,6 @@
   .seg-tab svg { width: 15px; height: 15px; }
   .appbar .spacer { flex: 1; }
 
-  /* 登录状态：状态点 + 邮箱（截断，悬停看完整邮箱；未登录＝橙点 +「未登录」） */
   .auth-status {
     display: flex;
     align-items: center;
@@ -158,7 +150,6 @@
     white-space: nowrap;
   }
 
-  /* 自绘窗口控制：30px 圆角方块；关闭悬停 Apple 红、点击隐藏到托盘 */
   .win-controls { display: flex; align-items: center; gap: 6px; }
   .win-btn {
     display: inline-flex;
@@ -180,7 +171,6 @@
   .win-btn--close:hover { background: var(--sys-red); color: #fff; }
   .win-btn--close:active { background: var(--danger-active); color: #fff; }
 
-  /* ---------- 主内容 ---------- */
   .page {
     padding: 24px;
   }
@@ -193,7 +183,7 @@
     overflow: hidden;
   }
 
-  /* 卡片头：左状态计数 + 右「Group」胶囊与刷新（AccountsView .s2a-summary） */
+  /* 卡片头：Key 页仅 正常/停用 计数 + 右侧刷新（无分组胶囊） */
   .summary {
     display: flex;
     align-items: center;
@@ -222,34 +212,6 @@
     min-width: 0;
   }
 
-  /* 分组胶囊：文案固定 Group（对齐托盘菜单用词），悬停显示当前分组 */
-  .group-pop {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    height: 28px;
-    max-width: 240px;
-    padding: 0 7px 0 11px;
-    border: none;
-    border-radius: 7px;
-    background: var(--seg-fill);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    color: rgba(23, 23, 23, 0.78);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s;
-  }
-  .group-pop:hover { background: var(--seg-fill-strong); }
-  .group-pop .txt {
-    min-width: 0;
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .group-pop svg { flex: none; width: 15px; height: 15px; color: rgba(23, 23, 23, 0.4); }
-
   .icon-btn {
     display: inline-flex;
     align-items: center;
@@ -265,7 +227,7 @@
   .icon-btn:hover { background: var(--seg-fill); color: var(--text-1); }
   .icon-btn svg { width: 15px; height: 15px; }
 
-  /* ---------- 账号表格 ---------- */
+  /* ---------- Key 表格 ---------- */
   table {
     width: 100%;
     table-layout: fixed;
@@ -293,7 +255,6 @@
   th.th-active {
     color: var(--text-2);
   }
-  /* Apple 风排序指示：成对 8×5px 小 chevron，当前方向点亮（上＝升序、下＝降序） */
   .si {
     display: inline-flex;
     flex-direction: column;
@@ -321,7 +282,7 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: var(--row-hover); }
 
-  /* 行首状态竖条：错误 > 限流/临时 > 正常 > 停用 */
+  /* 行首竖条：Key 页仅 启用绿 / 停用灰 两态 */
   .bar {
     position: absolute;
     left: 0;
@@ -331,10 +292,8 @@
     height: 22px;
     border-radius: 0 2px 2px 0;
   }
-  .bar-ok     { background: var(--sys-green); }
-  .bar-warn   { background: var(--sys-orange); }
-  .bar-error  { background: var(--sys-red); }
-  .bar-off    { background: var(--off-graphic); }
+  .bar-ok  { background: var(--sys-green); }
+  .bar-off { background: var(--off-graphic); }
 
   .name {
     font-size: 14px;
@@ -354,8 +313,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* 指定为托盘用量统计源的 Key：名字后跟 11px 蓝色折线小图标 */
+  .usage-mark {
+    display: inline-flex;
+    vertical-align: baseline;
+    margin-left: 4px;
+    color: var(--primary);
+  }
+  .usage-mark svg { width: 11px; height: 11px; }
 
-  /* 状态徽标：正常绿 / 错误红 / 其余灰（statusBadgeClass） */
   .tag {
     display: inline-flex;
     align-items: center;
@@ -367,13 +333,9 @@
     line-height: 1;
     white-space: nowrap;
   }
-  .tag-sm { height: 19px; padding: 0 6px; }
   .tag-success { background: var(--success-bg); color: var(--success); }
-  .tag-danger  { background: var(--danger-bg);  color: var(--danger); }
-  .tag-warning { background: var(--warning-bg); color: var(--warning); }
   .tag-off     { background: var(--info-bg);    color: var(--muted); }
 
-  /* 调度列：iOS 风迷你开关（32×20）+ 限流/临时小徽标 */
   .sw-wrap {
     display: flex;
     align-items: center;
@@ -413,7 +375,6 @@
     outline-offset: 1px;
   }
 
-  /* 数字列：13px 半粗 + 等宽数字，按阈值着色（<2s 绿 / <5s 橙 / 其余红） */
   .num {
     font-size: 13px;
     font-weight: 600;
@@ -423,10 +384,9 @@
   }
   .num .u { font-size: 11px; font-weight: 400; color: var(--text-3); margin-left: 1px; }
   .num.ok  { color: var(--success); }
-  .num.mid { color: var(--warning); }
+  .num.mid { color: #c55300; }
   .num.bad { color: var(--danger); }
   .num-none { font-size: 13px; color: var(--off-graphic); }
-  /* 测试失败：close-circle 红色图标（替代文字 ✕） */
   .num-fail {
     display: inline-flex;
     color: var(--sys-red);
@@ -434,7 +394,6 @@
   }
   .num-fail svg { width: 15px; height: 15px; }
 
-  /* 测试中：灰色横线 shimmer 骨架 */
   .sk {
     display: inline-block;
     width: 56px;
@@ -457,20 +416,24 @@
     .sk { animation: none; }
   }
 
-  /* 备注列 */
-  .note {
-    display: block;
-    font-size: 12px;
-    line-height: 1.35;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  /* 用量列：今日费用（主行）+ 次数 · token 量（副行），后台静默填充 */
+  .usage-main {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-1);
+    line-height: 1.3;
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
-  .note.ok  { color: var(--success); }
-  .note.err { color: var(--danger); }
-  .note.none { color: var(--off-graphic); }
+  .usage-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.3;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
 
-  /* 操作列：测试 + 选择模型测试（file-tree 图标） */
   .c-act { text-align: right; white-space: nowrap; }
   .act {
     display: inline-flex;
@@ -495,7 +458,6 @@
   .act:disabled { opacity: 0.45; cursor: default; }
   .act:disabled:hover { background: transparent; }
 
-  /* ---------- 卡片底分页条 ---------- */
   .pager {
     display: flex;
     align-items: center;
@@ -587,9 +549,8 @@
 <body>
 
   <div class="window">
-    <!-- 标题栏：应用图标 + 三标签（Group / API Key / 设置）+ 登录状态 + 窗口控制 -->
+    <!-- 标题栏：应用图标 + 三标签（API Key 激活）+ 登录状态 + 窗口控制 -->
     <header class="appbar">
-      <!-- 应用图标：透明底双环（icon.png），悬停显示版本号 -->
       <span class="app-icon" title="s2akit v0.2.1">
         <svg viewBox="0 0 24 24" role="img" aria-label="s2akit">
           <path d="M10.44 10.59A4.2 4.2 0 1 1 13.41 13.56" fill="none" stroke="#ffc131" stroke-width="2.2" stroke-linecap="round" />
@@ -599,11 +560,11 @@
         </svg>
       </span>
       <nav class="seg-tabs" role="tablist">
-        <button class="seg-tab active" type="button">
+        <button class="seg-tab" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           Group
         </button>
-        <button class="seg-tab" type="button">
+        <button class="seg-tab active" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
           API Key
         </button>
@@ -637,18 +598,12 @@
     <main class="page">
       <div class="table-card">
 
-        <!-- 卡片头：状态计数 + 右侧「Group」胶囊与刷新（自顶栏迁入） -->
+        <!-- 卡片头：正常/停用计数 + 刷新（Key 页无分组胶囊） -->
         <div class="summary">
-          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-green)"></span>正常 <b>96</b></span>
-          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-orange)"></span>限流 / 临时 <b>18</b></span>
-          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-red)"></span>错误 <b>9</b></span>
-          <span class="sum-item"><span class="sum-dot" style="background: var(--off-graphic)"></span>停用 <b>5</b></span>
+          <span class="sum-item"><span class="sum-dot" style="background: var(--sys-green)"></span>正常 <b>28</b></span>
+          <span class="sum-item"><span class="sum-dot" style="background: var(--off-graphic)"></span>停用 <b>8</b></span>
           <div class="summary-tools">
-            <button class="group-pop" type="button" title="主力池 · anthropic（128）">
-              <span class="txt">Group</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <button class="icon-btn" type="button" title="刷新分组与账号">
+            <button class="icon-btn" type="button" title="刷新 Key 列表">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             </button>
           </div>
@@ -661,12 +616,12 @@
             <col style="width: 132px" />
             <col style="width: 104px" />
             <col style="width: 96px" />
-            <col />
+            <col style="width: 150px" />
             <col style="width: 150px" />
           </colgroup>
           <thead>
             <tr>
-              <th class="sortable">账号
+              <th class="sortable">Key 名称
                 <span class="si" aria-hidden="true">
                   <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
                   <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
@@ -684,10 +639,9 @@
                   <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
                 </span>
               </th>
-              <!-- 当前排序列：首 token 升序，上 chevron 点亮 -->
-              <th class="sortable th-active">首 token
+              <th class="sortable">首 token
                 <span class="si" aria-hidden="true">
-                  <svg class="on" viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
+                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
                   <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
                 </span>
               </th>
@@ -697,28 +651,32 @@
                   <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
                 </span>
               </th>
-              <th class="sortable">备注 / 最近错误
+              <!-- 当前排序列：用量降序，下 chevron 点亮 -->
+              <th class="sortable th-active">用量
                 <span class="si" aria-hidden="true">
                   <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 6.8 8 2.8 12.5 6.8"/></svg>
-                  <svg viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
+                  <svg class="on" viewBox="0 0 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3.5 2.8 8 6.8 12.5 2.8"/></svg>
                 </span>
               </th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <!-- 正常 + 已测（快） -->
+            <!-- 正常 + 当前托盘用量统计源（名字后折线小图标） -->
             <tr>
               <td>
                 <span class="bar bar-ok"></span>
-                <div class="name" title="claude-main-01">claude-main-01</div>
-                <div class="meta">#12 · anthropic/oauth</div>
+                <div class="name" title="sk-main-pool">sk-main-pool<span class="usage-mark" title="正在查看该 Key 额度"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 15 7.5 9 11 13 16 6 21 10"/></svg></span></div>
+                <div class="meta">#3 · 主力池</div>
               </td>
               <td><span class="tag tag-success">正常</span></td>
-              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该 Key"></button></div></td>
               <td><span class="num ok">842<span class="u">ms</span></span></td>
               <td><span class="num">3,120<span class="u">ms</span></span></td>
-              <td><span class="note ok">✓ 正常</span></td>
+              <td>
+                <div class="usage-main" title="「sk-main-pool」今日 156 次请求 · 平均 7.7K tok/次&#10;输入 620K · 输出 480K · 缓存 100K&#10;缓存率 8.3% · 共 1.2M · 费用 $12.48">今日 $12.48</div>
+                <div class="usage-sub">156 次 · 1.2M</div>
+              </td>
               <td class="c-act">
                 <button class="act primary" type="button">测试</button>
                 <button class="act primary icon-only" type="button" title="选择模型测试">
@@ -727,23 +685,21 @@
               </td>
             </tr>
 
-            <!-- 限流 -->
+            <!-- 正常 + 已测（中速） -->
             <tr>
               <td>
-                <span class="bar bar-warn"></span>
-                <div class="name" title="claude-main-02">claude-main-02</div>
-                <div class="meta">#13 · anthropic/oauth</div>
+                <span class="bar bar-ok"></span>
+                <div class="name" title="sk-team-alpha">sk-team-alpha</div>
+                <div class="meta">#8 · 主力池</div>
               </td>
               <td><span class="tag tag-success">正常</span></td>
-              <td>
-                <div class="sw-wrap">
-                  <button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button>
-                  <span class="tag tag-warning tag-sm">限流</span>
-                </div>
-              </td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该 Key"></button></div></td>
               <td><span class="num mid">2,340<span class="u">ms</span></span></td>
               <td><span class="num">6,905<span class="u">ms</span></span></td>
-              <td><span class="note err">429 Too Many Requests｜上游限流，稍后自动恢复</span></td>
+              <td>
+                <div class="usage-main">今日 $3.02</div>
+                <div class="usage-sub">42 次 · 318K</div>
+              </td>
               <td class="c-act">
                 <button class="act primary" type="button">测试</button>
                 <button class="act primary icon-only" type="button" title="选择模型测试">
@@ -752,63 +708,21 @@
               </td>
             </tr>
 
-            <!-- 正常 + 未测 -->
+            <!-- 正常 + 测试中 -->
             <tr>
               <td>
                 <span class="bar bar-ok"></span>
-                <div class="name" title="claude-api-03">claude-api-03</div>
-                <div class="meta">#14 · anthropic/api</div>
+                <div class="name" title="sk-ci-nightly">sk-ci-nightly</div>
+                <div class="meta">#15 · 备用池</div>
               </td>
               <td><span class="tag tag-success">正常</span></td>
-              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
-              <td><span class="num-none">—</span></td>
-              <td><span class="num-none">—</span></td>
-              <td><span class="note none">—</span></td>
-              <td class="c-act">
-                <button class="act primary" type="button">测试</button>
-                <button class="act primary icon-only" type="button" title="选择模型测试">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.4"/><circle cx="18.5" cy="6" r="2.4"/><circle cx="18.5" cy="18" r="2.4"/><path d="M7.4 12h3.4M10.8 6h5.3M10.8 18h5.3M10.8 6v12"/></svg>
-                </button>
-              </td>
-            </tr>
-
-            <!-- 临时不可调度 -->
-            <tr>
-              <td>
-                <span class="bar bar-warn"></span>
-                <div class="name" title="gemini-pro-01">gemini-pro-01</div>
-                <div class="meta">#15 · google/oauth</div>
-              </td>
-              <td><span class="tag tag-success">正常</span></td>
-              <td>
-                <div class="sw-wrap">
-                  <button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button>
-                  <span class="tag tag-warning tag-sm">临时</span>
-                </div>
-              </td>
-              <td><span class="num bad">5,890<span class="u">ms</span></span></td>
-              <td><span class="num">9,412<span class="u">ms</span></span></td>
-              <td><span class="note err">timeout｜上游响应超时，临时移出调度 10 分钟</span></td>
-              <td class="c-act">
-                <button class="act primary" type="button">测试</button>
-                <button class="act primary icon-only" type="button" title="选择模型测试">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.4"/><circle cx="18.5" cy="6" r="2.4"/><circle cx="18.5" cy="18" r="2.4"/><path d="M7.4 12h3.4M10.8 6h5.3M10.8 18h5.3M10.8 6v12"/></svg>
-                </button>
-              </td>
-            </tr>
-
-            <!-- 测试中 -->
-            <tr>
-              <td>
-                <span class="bar bar-ok"></span>
-                <div class="name" title="gemini-flash-02">gemini-flash-02</div>
-                <div class="meta">#18 · google/api</div>
-              </td>
-              <td><span class="tag tag-success">正常</span></td>
-              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号" disabled></button></div></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该 Key" disabled></button></div></td>
               <td><span class="sk" aria-label="测试中"></span></td>
               <td><span class="sk" aria-label="测试中"></span></td>
-              <td><span class="note none">—</span></td>
+              <td>
+                <div class="usage-main">今日 $0.86</div>
+                <div class="usage-sub">18 次 · 95K</div>
+              </td>
               <td class="c-act">
                 <button class="act primary" type="button" disabled>测试</button>
                 <button class="act primary icon-only" type="button" title="选择模型测试" disabled>
@@ -817,18 +731,18 @@
               </td>
             </tr>
 
-            <!-- 正常 + 已测（快） -->
+            <!-- 正常 + 未测 + 无用量数据 -->
             <tr>
               <td>
                 <span class="bar bar-ok"></span>
-                <div class="name" title="claude-main-06">claude-main-06</div>
-                <div class="meta">#19 · anthropic/oauth</div>
+                <div class="name" title="sk-backup">sk-backup</div>
+                <div class="meta">#21 · 未分组</div>
               </td>
               <td><span class="tag tag-success">正常</span></td>
-              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
-              <td><span class="num ok">1,064<span class="u">ms</span></span></td>
-              <td><span class="num">3,877<span class="u">ms</span></span></td>
-              <td><span class="note ok">✓ 正常</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该 Key"></button></div></td>
+              <td><span class="num-none">—</span></td>
+              <td><span class="num-none">—</span></td>
+              <td><span class="num-none">—</span></td>
               <td class="c-act">
                 <button class="act primary" type="button">测试</button>
                 <button class="act primary icon-only" type="button" title="选择模型测试">
@@ -837,18 +751,18 @@
               </td>
             </tr>
 
-            <!-- 错误：首 token 为 close-circle 红色图标 -->
+            <!-- 错误（灰徽标）+ 测试失败图标 -->
             <tr>
               <td>
-                <span class="bar bar-error"></span>
-                <div class="name" title="codex-01">codex-01</div>
-                <div class="meta">#16 · openai/api</div>
+                <span class="bar bar-ok"></span>
+                <div class="name" title="sk-expired">sk-expired</div>
+                <div class="meta">#9 · 备用池</div>
               </td>
-              <td><span class="tag tag-danger">错误</span></td>
-              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该账号"></button></div></td>
+              <td><span class="tag tag-off">错误</span></td>
+              <td><div class="sw-wrap"><button type="button" class="sw on" role="switch" aria-checked="true" aria-label="禁用该 Key"></button></div></td>
               <td><span class="num-fail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span></td>
               <td><span class="num-none">—</span></td>
-              <td><span class="note err">401 Unauthorized｜令牌已过期，请重新授权</span></td>
+              <td><span class="num-none">—</span></td>
               <td class="c-act">
                 <button class="act primary" type="button">测试</button>
                 <button class="act primary icon-only" type="button" title="选择模型测试">
@@ -861,14 +775,14 @@
             <tr>
               <td>
                 <span class="bar bar-off"></span>
-                <div class="name" title="claude-main-05">claude-main-05</div>
-                <div class="meta">#17 · anthropic/oauth</div>
+                <div class="name" title="sk-old-client">sk-old-client</div>
+                <div class="meta">#22 · 未分组</div>
               </td>
               <td><span class="tag tag-off">停用</span></td>
-              <td><div class="sw-wrap"><button type="button" class="sw" role="switch" aria-checked="false" aria-label="启用该账号"></button></div></td>
+              <td><div class="sw-wrap"><button type="button" class="sw" role="switch" aria-checked="false" aria-label="启用该 Key"></button></div></td>
               <td><span class="num-none">—</span></td>
               <td><span class="num-none">—</span></td>
-              <td><span class="note none">—</span></td>
+              <td><span class="num-none">—</span></td>
               <td class="c-act">
                 <button class="act primary" type="button">测试</button>
                 <button class="act primary icon-only" type="button" title="选择模型测试">
@@ -881,7 +795,7 @@
 
         <!-- 卡片底：分页条 -->
         <div class="pager">
-          <span class="pager-total">共 <b>128</b> 个账号</span>
+          <span class="pager-total">共 <b>36</b> 个 Key</span>
           <div class="pager-right">
             <span class="pager-size">
               <span class="pager-size-label">每页</span>
@@ -897,6 +811,7 @@
               <button class="pg-btn pg-cur" type="button">1</button>
               <button class="pg-btn" type="button">2</button>
               <button class="pg-btn" type="button">3</button>
+              <button class="pg-btn" type="button">4</button>
               <button class="pg-btn" type="button" title="下一页">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
@@ -909,12 +824,12 @@
 
   <!-- 设计说明（实现参考，不属于界面本身） -->
   <aside class="notes">
-    <h2>设计说明 · 与 v0.2.x 实现对齐（App.vue / AccountsView / tables.css）</h2>
-    标题栏：<b>三标签 Group / API Key / 设置</b>（MDI 图标，前两个沿用英文文案）；左上角 20px 应用图标（透明底橙青双环，悬停显示版本号）；右侧<b>登录状态</b>（绿点＝已登录；未登录＝橙点 +「未登录」，邮箱截断、悬停看全文）与<b>自绘窗口控制</b> 30px 圆角方块（最小化 / 最大化 / 关闭；关闭悬停 <code>#FF3B30</code>、按压 <code>#D93025</code>，点击<b>隐藏到托盘</b>）；两者之间为<b>「界面主题」快捷按钮</b>——28px 图标钮、半填充对比圆图标（描边圆 + 右半实心），点击下拉 亮色 / 暗色 / 跟随系统 三选（当前项打勾，样式同 v-menu 弹层），选择即生效并跨窗口同步，与设置页「外观」组同一数据源；空白区域按住可拖动窗口、双击最大化。<b>分组胶囊与刷新按钮已从顶栏移入账号页卡片头</b>。<br />
-    卡片头：左侧状态计数（正常 / 限流·临时 / 错误 / 停用）；右侧「<b>Group</b>」胶囊——按钮文案固定 Group（对齐托盘菜单用词），悬停提示显示当前分组，下拉列表带选中勾；旁边为刷新按钮（加载时转圈）。<b>未登录时整卡不显示</b>，替换为提示条「请先在设置页填写 sub2api 地址与管理员账号并登录」＋「前往设置」按钮（v-alert tonal）。<br />
-    表格：列宽 216/84/132/104/96/自适应/150；行首 3px 状态竖条（错误红 <code>#FF3B30</code> ＞ 限流/临时橙 <code>#FF9500</code> ＞ 正常绿 <code>#34C759</code> ＞ 停用灰 <code>#C7C7CC</code>）；状态徽标只有三种——<b>正常绿 / 错误红 / 其余灰</b>（停用为灰 tint 底 + <code>#737373</code> 文字）；调度列为 iOS 风开关＋限流/临时小徽标；<b>首 token 失败显示 close-circle 红色图标</b>（非文字 ✕）；备注列悬停看完整错误；行悬停 <code>#F5F7FA</code>。<br />
-    操作与菜单：「测试」＋「选择模型测试」（<b>file-tree 图标</b>，弹模型选择对话框）；<b>行右键</b>快捷菜单：选择模型测试（悬停约 220ms 展开级联子菜单，贴边翻转）／禁用（启用）该账号。分页：默认每页 10（选项 10/20/50/100），页数 ≤7 全量、＞7 收敛为首页/尾页/当前±1 加省略号；空列表整条隐藏。<br />
-    色板：逐项对应 <code>apple.css</code> <code>:root</code>（画布 <code>#F2F3F5</code>、卡面 <code>#FFFFFF</code>、汇总/分页条 <code>#FAFBFC</code>、行分隔 <code>#F2F3F5</code>、卡片描边 <code>#EBEEF5</code>）；小字语义色用 HIG 加深版（绿 <code>#248A3D</code>、橙 <code>#C55300</code>），图形元素（竖条/圆点/开关/图标）用标准系统色；暗色版见 <code>accounts-dark.html</code>（对应 <code>html.dark</code>）。
+    <h2>设计说明 · 与 v0.2.x 实现对齐（KeysView.vue，与账号页同源 tables.css）</h2>
+    卡片头：Key 页只有<b>正常 / 停用</b>两个计数 + 右侧「刷新 Key 列表」按钮（<b>无分组胶囊</b>——Key 不按分组过滤，元信息行显示所属分组名）。未登录时与账号页同样替换为「前往设置」提示条。标题栏与账号页同款，登录状态与窗口控制之间含<b>「界面主题」快捷按钮</b>（下拉 亮色 / 暗色 / 跟随系统，点击即生效并跨窗口同步）。<br />
+    表格：列宽 216/84/132/104/96/150/150；行首竖条仅<b>启用绿 / 停用灰</b>两态；状态徽标<b>正常绿 / 其余灰</b>（错误状态也是灰徽标，错误信息经测试与悬停提示呈现）；首 token 失败显示 close-circle 红色图标；测试中骨架 shimmer + 按钮禁用。<br />
+    <b>用量列</b>：主行「今日 $费用」（14px 半粗、等宽数字）+ 副行「次数 · token 量」（K/M 紧凑格式），悬停显示明细（请求数、输入/输出/缓存、缓存率、均值与费用）；数据由后台<b>静默填充</b>（失败留空显示 —，不阻塞表格）；该列按费用排序，无数据排最后。<br />
+    托盘用量统计源：右键行「<b>查看该 Key 额度</b>」把该 Key 设为托盘菜单顶部用量统计对象（再点恢复汇总全部），被选中的 Key 名称后跟 11px 蓝色折线小图标（如首行 sk-main-pool）。行右键菜单完整项：查看该 Key 额度 / 选择模型测试（级联子菜单）/ 禁用（启用）该 Key。<br />
+    操作列与分页与账号页同款（测试 + file-tree 选择模型测试；每页默认 10，页数 &gt;7 收敛省略号）。色板对应 <code>apple.css</code> <code>:root</code>，暗色版见 <code>keys-dark.html</code>。
   </aside>
 
 </body>

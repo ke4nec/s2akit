@@ -43,6 +43,13 @@ pub struct AppState {
     /// 开发构建加载 vite 服务器，服务器不在时 webview 会停留在错误页，
     /// 借此在下右键时触发重载自愈
     pub menu_alive: AtomicBool,
+    /// 当前实际生效的暗色状态（theme=system 时由前端解析上报），
+    /// 供托盘窗口 acrylic 效果色用，不持久化
+    pub effective_dark: AtomicBool,
+    /// 托盘窗口 acrylic 已应用的明暗（false = 亮色，与 tauri.conf.json 静态
+    /// windowEffects 初始值一致）。acrylic 属 DWM 合成属性、不受 show 重置，
+    /// 只在明暗变化时重新应用——每次 show 重应用会触发一帧重绘闪烁
+    pub tray_acrylic_dark: AtomicBool,
     /// 托盘菜单锚点：右键时的光标物理坐标，菜单窗口底角定位依据
     pub menu_anchor: std::sync::Mutex<Option<(f64, f64)>>,
     /// 级联子菜单行锚点：账号行相对主菜单卡片上沿的逻辑偏移，子菜单窗口纵向定位依据

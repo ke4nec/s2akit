@@ -784,21 +784,21 @@ onBeforeUnmount(() => {
   padding: 0 7px 0 11px;
   border: none;
   border-radius: 7px;
-  background: rgba(118, 118, 128, 0.12);
+  background: var(--seg-fill);
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.01em;
-  color: rgba(0, 0, 0, 0.78);
+  color: hsl(var(--foreground) / 0.78);
   cursor: pointer;
   user-select: none;
   transition: background 0.15s var(--ease-in-out, ease);
 }
 .group-pop:hover {
-  background: rgba(118, 118, 128, 0.2);
+  background: var(--seg-fill-strong);
 }
 .group-pop:focus-visible {
-  outline: 2px solid rgba(0, 122, 255, 0.45);
+  outline: 2px solid hsl(var(--accent) / 0.45);
 }
 .group-pop-text {
   min-width: 0;
@@ -809,7 +809,7 @@ onBeforeUnmount(() => {
 }
 .group-pop-chevron,
 .group-pop-wait {
-  color: rgba(0, 0, 0, 0.4);
+  color: hsl(var(--foreground) / 0.4);
 }
 /* 分组下拉列表：限高滚动，其余沿用 Vuetify 菜单默认质感 */
 .group-list {
@@ -824,7 +824,7 @@ onBeforeUnmount(() => {
    不带 scoped 的 data-v 属性，样式须放非 scoped 块才能命中；
    类名沿用 s2a- 前缀全局命名约定（同 apple.css 的 .s2a-flag） */
 .s2a-th--active {
-  color: #606266;
+  color: hsl(var(--text-secondary));
 }
 .s2a-si {
   display: inline-flex;
@@ -837,9 +837,9 @@ onBeforeUnmount(() => {
   display: block;
   width: 8px;
   height: 5px;
-  color: #c7c7cc;
+  color: hsl(var(--off-graphic));
 }
 .s2a-si svg.s2a-si-on {
-  color: #6e6e73;
+  color: hsl(var(--muted-foreground));
 }
 </style>

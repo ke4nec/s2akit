@@ -11,6 +11,11 @@
         margin: 0;
         background: #f2f3f5;
       }
+      /* 暗色主题：下方内联脚本会在首帧前挂上 dark 类 */
+      html.dark,
+      html.dark body {
+        background: #1a1a1c;
+      }
       #app.boot {
         display: flex;
         align-items: center;
@@ -24,6 +29,9 @@
         letter-spacing: -0.01em;
         gap: 8px;
       }
+      html.dark #app.boot {
+        color: #98989d;
+      }
       #app.boot .ring {
         width: 18px;
         height: 18px;
@@ -32,12 +40,31 @@
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
       }
+      html.dark #app.boot .ring {
+        border-color: rgba(255, 255, 255, 0.12);
+        border-top-color: #0a84ff;
+      }
       @keyframes spin {
         to {
           transform: rotate(360deg);
         }
       }
     </style>
+    <script>
+      /* 防闪白：theme.ts 会把主题档位同步写进 localStorage（key 与其一致），
+         此处在首帧前同步读出并挂 dark 类；以 config 为准的校正在应用加载后进行 */
+      try {
+        var pref = localStorage.getItem("s2akit-theme") || "light";
+        var dark =
+          pref === "dark" ||
+          (pref === "system" &&
+            window.matchMedia &&
+            matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+      } catch (e) {
+        /* localStorage 不可用时按亮色 */
+      }
+    </script>
   </head>
 
   <body>

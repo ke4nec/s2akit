@@ -482,6 +482,60 @@ pub fn set_menu_opacity(app: AppHandle, opacity: f32) -> AppResult<()> {
     Ok(())
 }
 
+// ---------- 界面主题 ----------
+
+/// 按当前生效明暗给托盘窗口应用 acrylic 效果色。acrylic 属 DWM 合成属性、
+/// 不受 tao show() 重置（与 WS_EX_LAYERED 不同），因此只在明暗实际变化时应用——
+/// 每次 show 重应用会触发一帧重绘闪烁。颜色参数仅 Win10 1903+ 生效，
+/// Win11 上 acrylic 深浅由前端 CSS 半透明底色主导，两手都做保证各版本观感一致
+pub fn apply_tray_theme_effects(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let dark = state.effective_dark.load(std::sync::atomic::Ordering::Relaxed);
+    // swap 原子去重：明暗未变（含并发）时不再触碰窗口效果
+    if state.tray_acrylic_dark.swap(dark, std::sync::atomic::Ordering::Relaxed) == dark {
+        return;
+    }
+    drop(state);
+    let (r, g, b) = if dark { (34, 34, 37) } else { (242, 242, 245) };
+    for label in ["tray-menu", "tray-submenu"] {
+        if let Some(w) = app.get_webview_window(label) {
+            let effects = tauri::window::EffectsBuilder::new()
+                .effects([tauri::window::Effect::Acrylic])
+                .color(tauri::utils::config::Color(r, g, b, 255))
+                .build();
+            let _ = w.set_effects(effects);
+        }
+    }
+}
+
+/// 设置界面主题：theme 为档位（light/dark/system），dark 为前端解析后的实际明暗
+/// （system 档跟随系统）。档位变化才写盘并广播 theme-changed 让各窗口跟随；
+/// 跟随系统时仅明暗变化、档位不变，各窗口自行监听 matchMedia，无需广播
+#[tauri::command]
+pub fn set_theme(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    theme: String,
+    dark: bool,
+) -> AppResult<()> {
+    if !matches!(theme.as_str(), "light" | "dark" | "system") {
+        return Err(AppError::other(format!("未知主题: {theme}")));
+    }
+    state.effective_dark.store(dark, std::sync::atomic::Ordering::Relaxed);
+    let mut cfg = state.config_snapshot();
+    let changed = cfg.theme != theme;
+    if changed {
+        cfg.theme = theme.clone();
+        state.save_config(&cfg)?;
+    }
+    drop(state);
+    apply_tray_theme_effects(&app);
+    if changed {
+        let _ = app.emit("theme-changed", theme);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_main_window(app: AppHandle) {
     crate::tray::show_main_window(&app);
@@ -543,10 +597,11 @@ pub fn get_config(state: State<'_, AppState>) -> AppConfig {
 pub async fn save_config(app: AppHandle, mut config: AppConfig) -> AppResult<()> {
     let state = app.state::<AppState>();
     let old = state.config_snapshot();
-    // last_models 由测试流程实时更新、menu_opacity 由设置页单独命令控制，
+    // last_models 由测试流程实时更新、menu_opacity/theme 由设置页单独命令控制，
     // 均以本地当前值为准，防止前端旧快照保存设置时把它们覆盖回旧值
     config.last_models = old.last_models.clone();
     config.menu_opacity = old.menu_opacity;
+    config.theme = old.theme;
     config.usage_refresh_minutes = config
         .usage_refresh_minutes
         .clamp(AppConfig::MIN_USAGE_REFRESH_MINUTES, AppConfig::MAX_USAGE_REFRESH_MINUTES);

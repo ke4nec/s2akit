@@ -180,6 +180,8 @@ pub fn show_submenu_window(app: &AppHandle, kind: &str, target_id: i64, row_top:
     place_submenu_window(app, height);
     if let Some(w) = app.get_webview_window("tray-submenu") {
         let _ = w.show();
+        // 明暗未变化时内部短路，不重应用 acrylic（重应用会重绘闪烁）
+        crate::commands::apply_tray_theme_effects(app);
     }
     if let Some(main) = app.get_webview_window("tray-menu") {
         let _ = main.set_focus();
@@ -202,6 +204,7 @@ pub fn show_groups_submenu_window(app: &AppHandle, row_top: f64, height: f64) {
     place_submenu_window(app, height);
     if let Some(w) = app.get_webview_window("tray-submenu") {
         let _ = w.show();
+        crate::commands::apply_tray_theme_effects(app);
     }
     if let Some(main) = app.get_webview_window("tray-menu") {
         let _ = main.set_focus();
@@ -373,8 +376,9 @@ fn show_menu(app: &AppHandle) {
         let _ = w.show();
         let _ = w.set_focus();
         // 注意顺序：tao 的 show() 会重设窗口扩展样式、抹掉 WS_EX_LAYERED，
-        // 因此 alpha 必须在 show 之后应用
+        // 因此 alpha 必须在 show 之后应用；acrylic 内部按明暗变化短路，无变化时不触碰
         crate::commands::apply_menu_opacity(app);
+        crate::commands::apply_tray_theme_effects(app);
         let _ = app.emit_to("tray-menu", "tray-menu-shown", ());
     }
 }

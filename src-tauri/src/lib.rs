@@ -30,6 +30,8 @@ pub fn run() {
                 .map_err(|e| format!("无法定位配置目录: {e}"))?
                 .join("config.json");
             let cfg = AppConfig::load(&config_path);
+            // theme=dark 直接可判；system 的实际明暗待前端加载后上报校正
+            let effective_dark = cfg.theme == "dark";
             let http = reqwest::Client::builder()
                 .connect_timeout(Duration::from_secs(10))
                 .build()
@@ -48,6 +50,10 @@ pub fn run() {
                 usage_cache: RwLock::new(None),
                 usage_key: std::sync::Mutex::new(None),
                 menu_alive: AtomicBool::new(true),
+                // theme=dark 直接可判；system 的实际明暗待前端加载后上报校正
+                effective_dark: AtomicBool::new(effective_dark),
+                // tauri.conf.json 静态 windowEffects 已应用亮色 acrylic
+                tray_acrylic_dark: AtomicBool::new(false),
                 menu_anchor: std::sync::Mutex::new(None),
                 submenu_row_top: std::sync::Mutex::new(None),
             });
@@ -158,6 +164,7 @@ pub fn run() {
             commands::get_usage_key,
             commands::list_keys_usage,
             commands::set_menu_opacity,
+            commands::set_theme,
             commands::menu_pong,
             commands::fit_menu,
             commands::show_submenu,

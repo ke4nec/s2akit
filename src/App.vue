@@ -12,6 +12,7 @@ import {
   installUpdate,
   store,
 } from "./store";
+import { selectTheme, themeOptions, themeState } from "./theme";
 import AccountsView from "./views/AccountsView.vue";
 import KeysView from "./views/KeysView.vue";
 import SettingsView from "./views/SettingsView.vue";
@@ -34,6 +35,18 @@ const tabs = [
 
 /** 右上角悬停显示完整邮箱（可见文案有省略截断） */
 const authTip = computed(() => store.auth?.email ?? "");
+
+/** 界面主题快捷按钮：悬停只显示当前主题名（与项目 v-tooltip + apple-tip 风格对齐） */
+const themeTip = computed(() => {
+  const cur = themeOptions.find((o) => o.value === themeState.pref);
+  return cur?.label ?? "";
+});
+
+function cycleTheme() {
+  const order = themeOptions.map((o) => o.value);
+  const idx = order.indexOf(themeState.pref);
+  selectTheme(order[(idx + 1) % order.length]);
+}
 
 const downloadPercent = computed(() => {
   const { progress, total } = store.updater;
@@ -164,6 +177,32 @@ onBeforeUnmount(() => {
             <span class="status-dot" :class="store.auth ? 'status-dot--on' : 'status-dot--off'" />
             <span class="auth-email">{{ store.auth ? store.auth.email : "未登录" }}</span>
           </div>
+        </template>
+      </v-tooltip>
+      <!-- 界面主题快捷切换：点击轮流切换（亮色 → 暗色 → 跟随系统），悬停提示仅显示当前主题名 -->
+      <v-tooltip :text="themeTip" location="bottom" content-class="apple-tip">
+        <template #activator="{ props }">
+          <button
+            v-bind="props"
+            type="button"
+            class="theme-quick"
+            :aria-label="themeTip"
+            @click="cycleTheme"
+          >
+            <!-- 半填充对比圆（同 design 稿）：描边圆 + 右半实心，currentColor 随明暗反转 -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
         </template>
       </v-tooltip>
       <div class="win-controls">
@@ -337,14 +376,14 @@ onBeforeUnmount(() => {
   user-select: none;
   -webkit-user-drag: none;
 }
-/* macOS 分段控件：灰底容器 + 白色活动段 */
+/* macOS 分段控件：灰底容器 + 卡面活动段 */
 .seg-tabs {
   display: inline-flex;
   gap: 2px;
   margin-left: 10px;
   padding: 2px;
   border-radius: 9px;
-  background: rgba(118, 118, 128, 0.12);
+  background: var(--seg-fill);
 }
 .seg-tab {
   display: inline-flex;
@@ -372,9 +411,7 @@ onBeforeUnmount(() => {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-weight: 600;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.1),
-    0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--seg-active-shadow);
 }
 
 /* 登录状态：状态点 + 邮箱，替代原 v-chip */
@@ -393,12 +430,12 @@ onBeforeUnmount(() => {
   border-radius: 50%;
 }
 .status-dot--on {
-  background: #34c759;
-  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.15);
+  background: hsl(var(--system-success));
+  box-shadow: 0 0 0 3px hsl(var(--system-success) / 0.15);
 }
 .status-dot--off {
-  background: #ff9500;
-  box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.15);
+  background: hsl(var(--system-warning));
+  box-shadow: 0 0 0 3px hsl(var(--system-warning) / 0.15);
 }
 .auth-email {
   font-size: 13px;
@@ -406,6 +443,39 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 界面主题快捷按钮：28px 图标钮（与页面内工具钮同规格），半填充对比圆图标 */
+.theme-quick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-right: 4px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition:
+    background 0.15s var(--ease-out),
+    color 0.15s var(--ease-out);
+}
+.theme-quick:hover {
+  background: var(--seg-fill);
+  color: hsl(var(--foreground));
+}
+.theme-quick svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+.theme-quick:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.55);
+  outline-offset: 1px;
 }
 
 /* 窗口控制按钮：30px 圆角方块、灰悬浮；关闭按 Apple 红高亮 */
@@ -433,18 +503,18 @@ onBeforeUnmount(() => {
     color 0.15s var(--ease-out);
 }
 .win-btn:hover {
-  background: rgba(118, 118, 128, 0.12);
+  background: var(--seg-fill);
   color: hsl(var(--foreground));
 }
 .win-btn:active {
-  background: rgba(118, 118, 128, 0.2);
+  background: var(--seg-fill-strong);
 }
 .win-btn--close:hover {
-  background: #ff3b30;
+  background: hsl(var(--system-danger));
   color: #fff;
 }
 .win-btn--close:active {
-  background: #d93025;
+  background: hsl(var(--danger-active));
   color: #fff;
 }
 

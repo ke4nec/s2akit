@@ -17,6 +17,8 @@ pub struct AppConfig {
     pub menu_opacity: f32,
     /// 托盘菜单顶部额度信息的缓存时长（分钟），有效范围 1~1440
     pub usage_refresh_minutes: u64,
+    /// 界面主题："light" | "dark" | "system"（跟随系统）
+    pub theme: String,
     /// 每个账号上次测试实际使用的模型（account_id -> model_id），
     /// 作为该账号下次测试的默认模型
     pub last_models: HashMap<i64, String>,
@@ -34,6 +36,7 @@ impl Default for AppConfig {
             test_concurrency: 2,
             menu_opacity: 1.0,
             usage_refresh_minutes: Self::DEFAULT_USAGE_REFRESH_MINUTES,
+            theme: "light".into(),
             last_models: HashMap::new(),
         }
     }

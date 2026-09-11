@@ -1,18 +1,61 @@
 /* ============================================================
    Apple-Class 设计系统 · 全局基础样式
-   灰白画布 (#F2F3F5) · 白卡片 · 深炭灰文字 · Apple 蓝唯一强调色 · 8px 网格 · iOS 缓动
+   灰白画布 · 白卡片 · 深炭灰文字 · Apple 蓝唯一强调色 · 8px 网格 · iOS 缓动
+   双主题：:root 为亮色值，html.dark 整套覆盖为 Apple 深色系统色
    ============================================================ */
 
 :root {
-  /* Apple SF 灰度系统（HSL 通道值，用 hsl(var(--x)) 消费） */
-  --background: 0 0% 100%;
-  --foreground: 0 0% 9%;
+  /* Apple SF 灰度系统（HSL 通道值，用 hsl(var(--x)) 消费；
+     带 alpha 的场景写 hsl(var(--x) / a)，半透明复合色直接存完整颜色值） */
+  --canvas: 220 14% 96%; /* 窗体画布 #F2F3F5 */
+  --background: 0 0% 100%; /* 卡片面 #FFFFFF */
+  --foreground: 0 0% 9%; /* 主文字 */
+  --surface-2: 210 25% 98%; /* 表头 / 输入框浅底 #FAFBFC */
+  --surface-3: 216 20% 95%; /* hover / 禁用底 #F0F2F5 */
   --muted: 220 14% 96%;
   --muted-foreground: 0 0% 45%;
+  --text-secondary: 220 3% 39%; /* 次级文字 #606266 */
+  --text-tertiary: 220 4% 58%; /* 弱化文字 #909399 */
+  --text-placeholder: 222 6% 68%; /* 占位符 #A8ABB2 */
   --accent: 211 100% 50%;
   --accent-foreground: 0 0% 100%;
   --border: 0 0% 91%;
+  --divider: 222 33% 94%; /* 行分隔线 / 卡片描边 #EBEEF5 */
+  --row-hover: 216 33% 97%; /* 表格行 hover #F5F7FA */
   --ring: 211 100% 50%;
+  --menu-bg: 0 0% 100%; /* 下拉弹层底 */
+
+  /* 语义状态色：亮色取 HIG 加深版保证小字对比度（绿 #248A3D / 橙 #C55300），
+     图形元素（圆点、开关）用标准系统色 */
+  --status-success: 135 59% 34%; /* #248A3D */
+  --status-warning: 25 100% 39%; /* #C55300 */
+  --status-danger: 3 100% 59%; /* #FF3B30 */
+  --system-success: 135 59% 49%; /* #34C759 */
+  --system-success-hover: 134 61% 45%; /* #2DB94E */
+  --system-warning: 35 100% 50%; /* #FF9500 */
+  --system-danger: 3 100% 59%; /* #FF3B30 */
+  --system-gray: 240 4% 55%; /* #8E8E93 */
+  --off-graphic: 240 5% 79%; /* 禁用图形 #C7C7CC */
+  --row-divider: 220 13% 95%; /* 表格行分隔线 #F2F3F5 */
+  --danger-active: 4 71% 50%; /* 关闭按钮按压加深 #D93025 */
+  --flag-warning-bg: rgba(255, 149, 0, 0.14);
+
+  /* 复合色（含固定透明度，直接存完整值） */
+  --glass-bar-bg: rgba(255, 255, 255, 0.8);
+  --seg-fill: rgba(118, 118, 128, 0.12); /* 分段容器 / 控件悬停 iOS fill */
+  --seg-fill-strong: rgba(118, 118, 128, 0.2);
+  --seg-active-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --switch-track: rgba(120, 120, 128, 0.32);
+  --switch-track-hover: rgba(120, 120, 128, 0.44);
+  --skeleton-base: rgba(0, 0, 0, 0.06);
+  --skeleton-hi: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+  --card-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+  --menu-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --popover-shadow:
+    0 8px 28px rgb(0 0 0 / 0.14), 0 0 0 0.5px rgb(0 0 0 / 0.02);
 
   /* 8px 网格空间单位 */
   --space-xs: 4px;
@@ -28,6 +71,57 @@
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+/* 暗色主题：Apple 深色系统色，与亮色一一对应 */
+html.dark {
+  --canvas: 240 4% 11%; /* #1B1B1D */
+  --background: 240 4% 14%; /* #222224 */
+  --foreground: 240 8% 95%; /* #F2F2F7 */
+  --surface-2: 240 4% 17%; /* #2A2A2E */
+  --surface-3: 240 4% 20%; /* #303034 */
+  --muted: 240 4% 18%;
+  --muted-foreground: 240 4% 64%;
+  --text-secondary: 240 4% 72%;
+  --text-tertiary: 240 4% 58%;
+  --text-placeholder: 240 4% 46%;
+  --accent: 210 100% 52%; /* #0A84FF */
+  --accent-foreground: 0 0% 100%;
+  --border: 240 4% 24%; /* #3B3B40 */
+  --divider: 240 4% 22%;
+  --row-hover: 240 4% 16%;
+  --ring: 210 100% 52%;
+  --menu-bg: 240 4% 17%;
+
+  /* 暗色下小字在系统亮版基础上再提亮（深底上原色对比度反而不达标） */
+  --status-success: 135 64% 56%; /* 基于 #30D158 提亮 */
+  --status-warning: 36 100% 60%; /* 基于 #FF9F0A 提亮 */
+  --status-danger: 3 100% 66%; /* 基于 #FF453A 提亮 */
+  --system-success: 135 64% 50%; /* #30D158 */
+  --system-success-hover: 134 61% 45%; /* #2DB94E 同款加深 */
+  --system-warning: 36 100% 52%; /* #FF9F0A */
+  --system-danger: 3 100% 61%; /* #FF453A */
+  --system-gray: 240 2% 61%; /* #98989D */
+  --off-graphic: 240 4% 29%; /* #48484A */
+  --row-divider: 240 4% 18%; /* #2E2E30 */
+  --danger-active: 358 75% 59%; /* #E5484D */
+  --flag-warning-bg: rgba(255, 159, 10, 0.18);
+
+  --glass-bar-bg: rgba(30, 30, 32, 0.8);
+  --seg-fill: rgba(118, 118, 128, 0.24); /* 暗底上透明度提一档保证可见 */
+  --seg-fill-strong: rgba(118, 118, 128, 0.32);
+  --seg-active-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+  --switch-track: rgba(120, 120, 128, 0.42);
+  --switch-track-hover: rgba(120, 120, 128, 0.54);
+  --skeleton-base: rgba(255, 255, 255, 0.07);
+  --skeleton-hi: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.36);
+  --card-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  --menu-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --popover-shadow:
+    0 8px 28px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(0 0 0 / 0.2);
+}
+
 html {
   overflow-y: auto;
   font-family:
@@ -35,9 +129,13 @@ html {
     "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
     "Helvetica Neue", Arial, sans-serif;
   color: hsl(var(--foreground));
-  background: #f2f3f5;
+  background: hsl(var(--canvas));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 body,
 .v-application {
@@ -109,19 +207,19 @@ body,
 }
 
 /* ---------- 玻璃态 ---------- */
-/* 主窗口顶栏：白色 80% + 20px 毛玻璃 + 发丝线描边 */
+/* 主窗口顶栏：玻璃底 80% + 20px 毛玻璃 + 发丝线描边 */
 .glass-bar {
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--glass-bar-bg);
   backdrop-filter: blur(20px) saturate(120%);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
   border-bottom: 1px solid hsl(var(--border)) !important;
 }
-/* 内容卡片：纯白 + 发丝边框 + 极浅投影，Apple 偏爱的 12px 圆角 */
+/* 内容卡片：卡面 + 发丝边框 + 极浅投影，Apple 偏爱的 12px 圆角 */
 .glass-card {
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+  box-shadow: var(--card-shadow);
 }
 
 /* ---------- Vuetify 控件微调 ---------- */
@@ -150,10 +248,10 @@ body,
    弹层传送在 body 级 overlay 容器，组件 scoped 样式够不到，必须在这里全局覆盖；
    托盘窗口的 v-list 不在 v-menu 内，不受影响 */
 .v-menu .v-list {
-  background: #fff;
+  background: hsl(var(--menu-bg));
   border: 1px solid hsl(var(--border));
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--menu-shadow);
   padding: 4px;
 }
 .v-menu .v-list-item {
@@ -188,24 +286,24 @@ body,
   height: 19px;
   padding: 0 6px;
   border-radius: 4px;
-  background: rgba(255, 149, 0, 0.14);
-  color: #c55300;
+  background: var(--flag-warning-bg);
+  color: hsl(var(--status-warning));
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
 }
 
-/* 小字状态文本色：HIG 加深版保证小字对比度（design/accounts.html，
-   绿 #248A3D / 橙 #C55300，红不变）；图标、圆点等图形元素仍用主题标准系统色 */
+/* 小字状态文本色：亮色用 HIG 加深版、暗色用系统亮版保证小字对比度；
+   图标、圆点等图形元素仍用主题标准系统色 */
 .s2a-text-success {
-  color: #248a3d;
+  color: hsl(var(--status-success));
 }
 .s2a-text-warning {
-  color: #c55300;
+  color: hsl(var(--status-warning));
 }
 .s2a-text-danger {
-  color: #ff3b30;
+  color: hsl(var(--status-danger));
 }
 
 /* ---------- 全局滚动条：细条、圆角、悬停加深 ---------- */
@@ -217,13 +315,13 @@ body,
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.32);
+  background: var(--scrollbar-thumb-hover);
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
