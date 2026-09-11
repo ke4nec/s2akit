@@ -18,7 +18,7 @@ pub struct AuthEntry {
 pub struct UsageCache {
     pub key: Option<i64>,
     pub fetched_at: Instant,
-    pub usage: Option<crate::commands::KeyUsageToday>,
+    pub usage: Option<crate::usage::KeyUsageToday>,
 }
 
 pub struct AppState {

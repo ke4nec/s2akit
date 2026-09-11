@@ -4,6 +4,7 @@ mod error;
 mod state;
 mod sub2api;
 mod tray;
+mod usage;
 #[cfg(windows)]
 mod win_toast;
 
@@ -159,10 +160,10 @@ pub fn run() {
             commands::get_key_models,
             commands::tray_test_key,
             commands::get_last_results,
-            commands::get_usage_today,
-            commands::set_usage_key,
-            commands::get_usage_key,
-            commands::list_keys_usage,
+            usage::get_usage_today,
+            usage::set_usage_key,
+            usage::get_usage_key,
+            usage::list_keys_usage,
             commands::set_menu_opacity,
             commands::set_theme,
             commands::set_theme_fx,
