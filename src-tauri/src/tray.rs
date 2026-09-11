@@ -177,8 +177,24 @@ pub fn show_submenu_window(app: &AppHandle, kind: &str, target_id: i64, row_top:
         .submenu_row_top
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(row_top);
-    place_submenu_window(app, height);
     if let Some(w) = app.get_webview_window("tray-submenu") {
+        // 切换账号/Key 时窗口本来已经可见，保留当前高度直到新内容测量完成，
+        // 避免先按 80px 估算高度收缩、再在前端异步加载后跳回真实高度。
+        // 首次打开仍使用前端传入的估算高度，透明首帧不会露出启动底色。
+        let initial_height = if w.is_visible().unwrap_or(false) {
+            let scale = app
+                .get_webview_window("tray-menu")
+                .and_then(|main| main.scale_factor().ok())
+                .unwrap_or(1.0);
+            w.outer_size()
+                .ok()
+                .map(|size| size.height as f64 / scale)
+                .filter(|h| *h > 0.0)
+                .unwrap_or(height)
+        } else {
+            height
+        };
+        place_submenu_window(app, initial_height);
         let _ = w.show();
         // 明暗未变化时内部短路，不重应用 acrylic（重应用会重绘闪烁）
         crate::commands::apply_tray_theme_effects(app);
@@ -201,8 +217,23 @@ pub fn show_groups_submenu_window(app: &AppHandle, row_top: f64, height: f64) {
         .submenu_row_top
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(row_top);
-    place_submenu_window(app, height);
     if let Some(w) = app.get_webview_window("tray-submenu") {
+        // 组/账号模式切换时沿用当前窗口高度，待前端完成内容测量后再贴合，
+        // 避免可见窗口先跳到估算高度而露出底部背景。
+        let scale = app
+            .get_webview_window("tray-menu")
+            .and_then(|main| main.scale_factor().ok())
+            .unwrap_or(1.0);
+        let initial_height = if w.is_visible().unwrap_or(false) {
+            w.outer_size()
+                .ok()
+                .map(|size| size.height as f64 / scale)
+                .filter(|h| *h > 0.0)
+                .unwrap_or(height)
+        } else {
+            height
+        };
+        place_submenu_window(app, initial_height);
         let _ = w.show();
         crate::commands::apply_tray_theme_effects(app);
     }

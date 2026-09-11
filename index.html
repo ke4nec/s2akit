@@ -16,6 +16,15 @@
       html.dark body {
         background: #1a1a1c;
       }
+      /* 托盘两个独立 WebView 由 Rust 控制显示；首帧不应露出启动占位底色。
+         class 由下方内联脚本在加载主模块前同步挂上。 */
+      html.tray-window,
+      html.tray-window body {
+        background: transparent !important;
+      }
+      html.tray-window #app.boot {
+        visibility: hidden;
+      }
       #app.boot {
         display: flex;
         align-items: center;
@@ -54,6 +63,9 @@
       /* 防闪白：theme.ts 会把主题档位同步写进 localStorage（key 与其一致），
          此处在首帧前同步读出并挂 dark 类；以 config 为准的校正在应用加载后进行 */
       try {
+        if (location.hash.includes("tray-menu") || location.hash.includes("tray-submenu")) {
+          document.documentElement.classList.add("tray-window");
+        }
         var pref = localStorage.getItem("s2akit-theme") || "light";
         var dark =
           pref === "dark" ||

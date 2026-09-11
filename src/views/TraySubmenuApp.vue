@@ -47,9 +47,11 @@ async function fit() {
 }
 
 function scheduleFit() {
-  requestAnimationFrame(() => void fit());
-  // 兜底：字体/列表渲染晚于首帧的高度变化，延迟再校一次（fit 幂等，仅按内容收敛）
-  window.setTimeout(() => void fit(), 160);
+  // 等待 Vuetify 完成一帧布局即可测到稳定高度；延迟数百毫秒再改窗口高度
+  // 会把初始亚克力底色暴露在卡片底部，表现为菜单先变高再收回。
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => void fit());
+  });
 }
 
 /** 悬停提示透明度跟随菜单不透明度设置（×85%），每次打开子菜单刷新一次 */
@@ -700,29 +702,14 @@ onBeforeUnmount(() => {
 }
 .submenu-card {
   position: relative;
-  /* macOS 式弹出：淡入 + 轻微放大（v-if 重建时重播，切换内容也有跟手感） */
-  animation: sub-in 0.12s ease-out;
+  width: 100%;
+  box-sizing: border-box;
   background: rgba(246, 246, 248, 0.72);
   max-height: 100vh;
   border: 1px solid rgba(0, 0, 0, 0.08);
   /* 8px 与 DWM 窗口圆角一致，与主菜单严丝合缝 */
   border-radius: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-@keyframes sub-in {
-  from {
-    opacity: 0;
-    transform: scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .submenu-card {
-    animation: none;
-  }
 }
 /* 加载条悬浮顶部不占布局，避免窗口高度抖动 */
 .submenu-card > .v-progress-linear {
