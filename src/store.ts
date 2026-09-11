@@ -208,6 +208,7 @@ export async function login() {
       store.pending2fa = { tempToken: reply.temp_token };
       snack("该账号开启了二步验证，请输入验证码", "info");
     } else {
+      store.pending2fa = null;
       store.auth = await invoke<AuthInfo | null>("get_auth");
       snack("登录成功", "success");
       await afterLogin();
@@ -240,6 +241,7 @@ export async function logout() {
     store.accounts = [];
     store.results = {};
     store.testingIds.clear();
+    store.pending2fa = null;
     snack("已退出登录", "info");
   } catch (e) {
     handleErr(e);
