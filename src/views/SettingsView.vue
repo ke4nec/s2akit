@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { checkForUpdates, installUpdate, login, saveConfig, store, submit2fa } from "../store";
-import { selectTheme, themeOptions, themeState } from "../theme";
+import { selectTheme, selectThemeFx, themeFxOptions, themeFxState, themeOptions, themeState } from "../theme";
+import type { ThemeFx } from "../theme";
 import type { AppConfig } from "../types";
 
 function defaultConfig(): AppConfig {
@@ -17,6 +18,7 @@ function defaultConfig(): AppConfig {
     menu_opacity: 1,
     usage_refresh_minutes: 10,
     theme: "light",
+    theme_fx: "reveal",
   };
 }
 
@@ -74,6 +76,17 @@ async function doSaveAndLogin() {
 async function doSubmit2fa() {
   if (!totpCode.value.trim()) return;
   await submit2fa(totpCode.value.trim());
+}
+
+/** 当前所选动效的说明文案：设置页「切换动效」行下方展示 */
+const activeFxDesc = computed(() => themeFxOptions.find((o) => o.value === themeFxState.fx)?.desc ?? "");
+
+/** 当前所选动效的展示名：下拉触发按钮文案（与主页面 Group 下拉同款） */
+const activeFxLabel = computed(() => themeFxOptions.find((o) => o.value === themeFxState.fx)?.label ?? "");
+
+/** 切换动效下拉变更：即时生效（下次切主题时用）+ 持久化 + 跨窗口同步 */
+function onFxSelect(fx: ThemeFx) {
+  selectThemeFx(fx);
 }
 
 /** 更新状态提示：下载中/已就绪时显示在按钮左侧 */
@@ -221,11 +234,43 @@ function onCheckUpdate() {
               class="theme-seg-btn"
               :class="{ 'theme-seg-btn--active': themeState.pref === opt.value }"
               :aria-checked="themeState.pref === opt.value"
-              @click="selectTheme(opt.value)"
+              @click="selectTheme(opt.value, $event)"
             >
               {{ opt.label }}
             </button>
           </div>
+        </div>
+      </div>
+      <div class="row row--fx">
+        <div class="row-label">切换动效</div>
+        <div class="ctrl ctrl--fx">
+          <!-- 动效下拉：与主页面 Group 选择器同款 v-menu 胶囊（替代原生 select，各主题下质感一致） -->
+          <v-menu scroll-strategy="close">
+            <template #activator="{ props: menuProps }">
+              <button
+                v-bind="menuProps"
+                type="button"
+                class="fx-pop"
+                aria-label="主题切换动效"
+              >
+                <span class="fx-pop-text">{{ activeFxLabel }}</span>
+                <v-icon icon="mdi-chevron-down" size="15" class="fx-pop-chevron" />
+              </button>
+            </template>
+            <v-list density="compact" class="fx-list">
+              <v-list-item v-for="fx in themeFxOptions" :key="fx.value" @click="onFxSelect(fx.value)">
+                <template #prepend>
+                  <v-icon
+                    :icon="fx.value === themeFxState.fx ? 'mdi-check' : 'mdi-circle-medium'"
+                    :color="fx.value === themeFxState.fx ? 'primary' : 'grey'"
+                    size="15"
+                  />
+                </template>
+                <v-list-item-title>{{ fx.label }}</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
+          <div v-if="activeFxDesc" class="fx-desc">{{ activeFxDesc }}</div>
         </div>
       </div>
     </section>
@@ -443,6 +488,68 @@ function onCheckUpdate() {
   color: hsl(var(--foreground));
   font-weight: 600;
   box-shadow: var(--seg-active-shadow);
+}
+/* 切换动效行：下拉与说明文案纵向堆叠右对齐，标签顶部对齐 */
+.row--fx {
+  align-items: flex-start;
+}
+.ctrl--fx {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+/* 动效下拉触发胶囊：与主页面 Group 选择器（AccountsView .group-pop）同款，
+   macOS 工具栏弹出菜单风格，28px 高、灰底圆角、悬浮加深；定宽与输入框右对齐 */
+.fx-pop {
+  flex: none;
+  width: 160px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 7px 0 11px;
+  border: none;
+  border-radius: 7px;
+  background: var(--seg-fill);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground) / 0.78);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s var(--ease-in-out, ease);
+}
+.fx-pop:hover {
+  background: var(--seg-fill-strong);
+}
+.fx-pop:focus-visible {
+  outline: 2px solid hsl(var(--accent) / 0.45);
+}
+.fx-pop-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fx-pop-chevron {
+  flex: none;
+  color: hsl(var(--foreground) / 0.4);
+}
+/* 动效下拉列表：与主页面 Group 下拉（AccountsView .group-list）一致，Vuetify 菜单默认质感 */
+.fx-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+.fx-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+  text-align: right;
 }
 
 /* 滑杆：数值置于轨道上方，省横向宽度；蓝填充轨道 + 白圆钮 */

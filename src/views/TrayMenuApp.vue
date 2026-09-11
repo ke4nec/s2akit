@@ -459,7 +459,7 @@ onMounted(async () => {
   document.body.style.background = "transparent";
   // 托盘窗口不跑 store.init()，主题按配置自行初始化（含系统明暗/跨窗口监听）
   invoke<AppConfig>("get_config")
-    .then((cfg) => void initTheme(cfg.theme))
+    .then((cfg) => void initTheme(cfg.theme, cfg.theme_fx))
     .catch(() => {});
   unlistens.push(
     await listen("tray-menu-shown", () => {

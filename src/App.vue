@@ -42,10 +42,10 @@ const themeTip = computed(() => {
   return cur?.label ?? "";
 });
 
-function cycleTheme() {
+function cycleTheme(ev?: MouseEvent) {
   const order = themeOptions.map((o) => o.value);
   const idx = order.indexOf(themeState.pref);
-  selectTheme(order[(idx + 1) % order.length]);
+  selectTheme(order[(idx + 1) % order.length], ev);
 }
 
 const downloadPercent = computed(() => {
@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
             type="button"
             class="theme-quick"
             :aria-label="themeTip"
-            @click="cycleTheme"
+            @click="cycleTheme($event)"
           >
             <!-- 半填充对比圆（同 design 稿）：描边圆 + 右半实心，currentColor 随明暗反转 -->
             <svg

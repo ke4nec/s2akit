@@ -11,6 +11,8 @@ export interface AppConfig {
   usage_refresh_minutes: number;
   /** 界面主题："light" | "dark" | "system"（跟随系统），默认 "light" */
   theme: string;
+  /** 主题切换动效："reveal" | "fade" | "wipe" | "blur" | "sync"，默认 "reveal" */
+  theme_fx: string;
   /** Rust 侧维护（账号上次测试模型，account_id -> model_id），前端只读 */
   last_models?: Record<string, string>;
 }

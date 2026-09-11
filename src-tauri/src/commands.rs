@@ -511,6 +511,29 @@ pub fn apply_tray_theme_effects(app: &AppHandle) {
 /// 设置界面主题：theme 为档位（light/dark/system），dark 为前端解析后的实际明暗
 /// （system 档跟随系统）。档位变化才写盘并广播 theme-changed 让各窗口跟随；
 /// 跟随系统时仅明暗变化、档位不变，各窗口自行监听 matchMedia，无需广播
+/// 设置主题切换动效：仅档位变化时写盘并广播 theme-fx-changed 让各窗口跟随，
+/// 各窗口收到后只更新偏好不回写，避免回声
+#[tauri::command]
+pub fn set_theme_fx(app: AppHandle, state: State<'_, AppState>, theme_fx: String) -> AppResult<()> {
+    if !matches!(theme_fx.as_str(), "reveal" | "fade" | "wipe" | "blur" | "sync") {
+        return Err(AppError::other(format!("未知切换动效: {theme_fx}")));
+    }
+    let mut cfg = state.config_snapshot();
+    let changed = cfg.theme_fx_normalized() != theme_fx;
+    if changed {
+        cfg.theme_fx = theme_fx.clone();
+        state.save_config(&cfg)?;
+    }
+    drop(state);
+    if changed {
+        let _ = app.emit("theme-fx-changed", theme_fx);
+    }
+    Ok(())
+}
+
+/// 设置界面主题：theme 为档位（light/dark/system），dark 为前端解析后的实际明暗
+/// （system 档跟随系统）。档位变化才写盘并广播 theme-changed 让各窗口跟随；
+/// 跟随系统时仅明暗变化、档位不变，各窗口自行监听 matchMedia，无需广播
 #[tauri::command]
 pub fn set_theme(
     app: AppHandle,
@@ -590,18 +613,22 @@ pub fn quit_app(app: AppHandle) {
 
 #[tauri::command]
 pub fn get_config(state: State<'_, AppState>) -> AppConfig {
-    state.config_snapshot()
+    let mut cfg = state.config_snapshot();
+    // 手改配置文件写入非法动效时读出即回落默认，前端总能拿到可渲染的值
+    cfg.theme_fx = cfg.theme_fx_normalized();
+    cfg
 }
 
 #[tauri::command]
 pub async fn save_config(app: AppHandle, mut config: AppConfig) -> AppResult<()> {
     let state = app.state::<AppState>();
     let old = state.config_snapshot();
-    // last_models 由测试流程实时更新、menu_opacity/theme 由设置页单独命令控制，
+    // last_models 由测试流程实时更新、menu_opacity/theme/theme_fx 由单独命令控制，
     // 均以本地当前值为准，防止前端旧快照保存设置时把它们覆盖回旧值
     config.last_models = old.last_models.clone();
     config.menu_opacity = old.menu_opacity;
     config.theme = old.theme;
+    config.theme_fx = old.theme_fx;
     config.usage_refresh_minutes = config
         .usage_refresh_minutes
         .clamp(AppConfig::MIN_USAGE_REFRESH_MINUTES, AppConfig::MAX_USAGE_REFRESH_MINUTES);

@@ -19,6 +19,8 @@ pub struct AppConfig {
     pub usage_refresh_minutes: u64,
     /// 界面主题："light" | "dark" | "system"（跟随系统）
     pub theme: String,
+    /// 主题切换动效："reveal" | "fade" | "wipe" | "blur" | "sync"，默认 "reveal"
+    pub theme_fx: String,
     /// 每个账号上次测试实际使用的模型（account_id -> model_id），
     /// 作为该账号下次测试的默认模型
     pub last_models: HashMap<i64, String>,
@@ -37,6 +39,7 @@ impl Default for AppConfig {
             menu_opacity: 1.0,
             usage_refresh_minutes: Self::DEFAULT_USAGE_REFRESH_MINUTES,
             theme: "light".into(),
+            theme_fx: Self::DEFAULT_THEME_FX.into(),
             last_models: HashMap::new(),
         }
     }
@@ -48,6 +51,17 @@ impl AppConfig {
     pub const MIN_USAGE_REFRESH_MINUTES: u64 = 1;
     pub const MAX_USAGE_REFRESH_MINUTES: u64 = 24 * 60;
 
+    /// 主题切换动效的默认值与合法值（手改配置文件写入非法值时回落默认）
+    pub const DEFAULT_THEME_FX: &'static str = "reveal";
+
+    /// 归一化动效取值，非法值回落默认，保证前端总能拿到可渲染的值
+    pub fn theme_fx_normalized(&self) -> String {
+        match self.theme_fx.as_str() {
+            "reveal" | "fade" | "wipe" | "blur" | "sync" => self.theme_fx.clone(),
+            _ => Self::DEFAULT_THEME_FX.into(),
+        }
+    }
+
     /// 夹取到有效范围的缓存时长，防止手改配置文件写入越界值
     pub fn usage_refresh_minutes_clamped(&self) -> u64 {
         self.usage_refresh_minutes
@@ -55,10 +69,13 @@ impl AppConfig {
     }
 
     pub fn load(path: &Path) -> Self {
-        fs::read_to_string(path)
+        let mut cfg: Self = fs::read_to_string(path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // 老配置文件缺 theme_fx 字段时反序列化为空串，读出即回落默认
+        cfg.theme_fx = cfg.theme_fx_normalized();
+        cfg
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {

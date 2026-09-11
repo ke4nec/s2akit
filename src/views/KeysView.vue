@@ -665,10 +665,17 @@ onBeforeUnmount(() => {
                     <v-list-item
                       v-for="n in itemsPerPageOptions"
                       :key="n"
-                      :active="n === perPage"
-                      :title="`${n} 条`"
                       @click="setItemsPerPage(n)"
-                    />
+                    >
+                      <template #prepend>
+                        <v-icon
+                          :icon="n === perPage ? 'mdi-check' : 'mdi-circle-medium'"
+                          :color="n === perPage ? 'primary' : 'grey'"
+                          size="15"
+                        />
+                      </template>
+                      <v-list-item-title>{{ n }} 条</v-list-item-title>
+                    </v-list-item>
                   </v-list>
                 </v-menu>
               </span>

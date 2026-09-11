@@ -165,6 +165,7 @@ pub fn run() {
             commands::list_keys_usage,
             commands::set_menu_opacity,
             commands::set_theme,
+            commands::set_theme_fx,
             commands::menu_pong,
             commands::fit_menu,
             commands::show_submenu,

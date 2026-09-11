@@ -189,6 +189,129 @@ body,
   }
 }
 
+/* ---------- 主题切换动效 ---------- */
+/* 平滑同步：html.theming 挂载 280ms 期间，全界面颜色统一渐变，
+   画布/卡片/表格同步变化，修掉“先周围变、再表格变”的撕裂；
+   只收敛到绘制最便宜的三个颜色属性（box-shadow/fill 等重绘贵，不收编），
+   不碰 transform/opacity，避免干扰现有入场动画 */
+html.theming,
+html.theming *,
+html.theming *::before,
+html.theming *::after {
+  transition:
+    background-color 0.2s var(--ease-in-out),
+    border-color 0.2s var(--ease-in-out),
+    color 0.2s var(--ease-in-out) !important;
+}
+/* 快照冻结：View Transitions 抓取新快照前，行内自带过渡全部暂停，
+   新快照一次拍到终色；过渡期间真实 DOM 静止，快照动画独占合成器，
+   避免“快照动画 + 几百个行内渐变”双重负载造成的卡顿 */
+html.fx-snap,
+html.fx-snap *,
+html.fx-snap *::before,
+html.fx-snap *::after {
+  transition: none !important;
+}
+/* 圆形扩散：旧主题静止垫底，新主题从点击处 (--tx/--ty) 为圆心扩散盖住；
+   --r 由 theme.ts 按覆盖全窗口计算（圆心到四角最大距离 + 余量） */
+/* 旧快照全程静止垫底，但最后 20% 淡到透明：正常收尾时它已被新快照全盖，
+   淡出不可见；若合成器拆卸两幅快照有先后（先撤新再撤旧），旧快照也不会
+   以全屏旧模式闪一帧——收尾闪的兜底 */
+html[data-theme-fx="reveal"]::view-transition-old(root) {
+  animation: theme-fx-reveal-old 0.42s cubic-bezier(0, 0, 0.2, 1) both;
+}
+html[data-theme-fx="reveal"]::view-transition-new(root) {
+  animation: theme-fx-reveal 0.42s cubic-bezier(0, 0, 0.2, 1) both;
+  clip-path: circle(0 at var(--tx, 50%) var(--ty, 50%));
+}
+@keyframes theme-fx-reveal-old {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes theme-fx-reveal {
+  to {
+    clip-path: circle(var(--r, 150vmax) at var(--tx, 50%) var(--ty, 50%));
+  }
+}
+/* 淡入淡出：纯透明度交叉淡化，不碰位移/缩放——整页快照哪怕动 1px，
+   在发丝线和表格上都像重绘抖动，故只做透明度 */
+html[data-theme-fx="fade"]::view-transition-old(root) {
+  animation: theme-fx-fade-out 0.24s ease both;
+}
+html[data-theme-fx="fade"]::view-transition-new(root) {
+  animation: theme-fx-fade-in 0.24s ease both;
+}
+@keyframes theme-fx-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes theme-fx-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* 擦除滑动：新主题从左侧如窗帘滑入盖住旧主题 */
+html[data-theme-fx="wipe"]::view-transition-old(root) {
+  animation: none;
+}
+html[data-theme-fx="wipe"]::view-transition-new(root) {
+  animation: theme-fx-wipe 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes theme-fx-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+/* 模糊渐变：旧主题模糊淡出、新主题由模糊变清晰，盖住重绘撕裂；
+   全窗口模糊逐帧重绘最贵，半径收到 6px 且时长压到 0.28s，弱 GPU 也能扛住 */
+html[data-theme-fx="blur"]::view-transition-old(root) {
+  animation: theme-fx-blur-out 0.28s ease both;
+}
+html[data-theme-fx="blur"]::view-transition-new(root) {
+  animation: theme-fx-blur-in 0.28s ease both;
+}
+@keyframes theme-fx-blur-out {
+  to {
+    opacity: 0;
+    filter: blur(6px) brightness(1.06);
+  }
+}
+@keyframes theme-fx-blur-in {
+  from {
+    opacity: 0;
+    filter: blur(6px) brightness(1.06);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theming,
+  html.theming *,
+  html.theming *::before,
+  html.theming *::after {
+    transition: none !important;
+  }
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
 /* ---------- 悬停提示统一皮肤 ---------- */
 /* 托盘菜单体系（主菜单 / 级联子菜单）的悬停提示：深色苹果风气泡，
    content-class="apple-tip" 挂载生效；pre-line 让 \n 换行。
