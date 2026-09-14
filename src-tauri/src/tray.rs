@@ -92,12 +92,15 @@ pub fn show_menu_window(app: &AppHandle, cursor: PhysicalPosition<f64>) {
                 .unwrap_or_else(|e| e.into_inner())
                 .len(),
         );
-    let logical_h = estimate_menu_height(n);
+    // 优先沿用前端上次实测高度，内容未变时重开不会先按粗估值闪跳一次。
+    let logical_h = app
+        .state::<crate::state::AppState>()
+        .menu_height
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .unwrap_or_else(|| estimate_menu_height(n));
     place_menu(app, &w, logical_h);
     show_menu(app);
-    // show() 之后再定位一次：show 可能重设窗口状态，此时窗口可见、
-    // scale 与尺寸均已权威，锚点定位精确生效（与 fit_menu 的后续修正互补）
-    place_menu(app, &w, logical_h);
 }
 
 /// 前端回报真实内容高度后重设窗口尺寸并按锚点重新定位（仅菜单可见时生效）
@@ -119,7 +122,13 @@ pub fn fit_menu_window(app: &AppHandle, height: f64) {
         .and_then(|(x, y)| work_area_at(app, x, y))
         .map(|(_, top, _, bottom)| (bottom - top) / scale)
         .unwrap_or(640.0);
-    place_menu(app, &w, height.clamp(120.0, cap));
+    let h = height.clamp(120.0, cap);
+    place_menu(app, &w, h);
+    *app
+        .state::<crate::state::AppState>()
+        .menu_height
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(h);
 }
 
 /// 设置菜单窗口高度，并把菜单底角贴到锚点光标处（允许盖住任务栏上沿，与原生行为一致）
@@ -196,8 +205,6 @@ pub fn show_submenu_window(app: &AppHandle, kind: &str, target_id: i64, row_top:
         };
         place_submenu_window(app, initial_height);
         let _ = w.show();
-        // 明暗未变化时内部短路，不重应用 acrylic（重应用会重绘闪烁）
-        crate::commands::apply_tray_theme_effects(app);
     }
     if let Some(main) = app.get_webview_window("tray-menu") {
         let _ = main.set_focus();
@@ -235,7 +242,6 @@ pub fn show_groups_submenu_window(app: &AppHandle, row_top: f64, height: f64) {
         };
         place_submenu_window(app, initial_height);
         let _ = w.show();
-        crate::commands::apply_tray_theme_effects(app);
     }
     if let Some(main) = app.get_webview_window("tray-menu") {
         let _ = main.set_focus();
@@ -406,10 +412,8 @@ fn show_menu(app: &AppHandle) {
         let _ = w.set_always_on_top(true);
         let _ = w.show();
         let _ = w.set_focus();
-        // 注意顺序：tao 的 show() 会重设窗口扩展样式、抹掉 WS_EX_LAYERED，
-        // 因此 alpha 必须在 show 之后应用；acrylic 内部按明暗变化短路，无变化时不触碰
+        // tao 的 show() 会重设扩展样式、抹掉 WS_EX_LAYERED，透明度必须在显示后恢复。
         crate::commands::apply_menu_opacity(app);
-        crate::commands::apply_tray_theme_effects(app);
         let _ = app.emit_to("tray-menu", "tray-menu-shown", ());
     }
 }

@@ -52,6 +52,8 @@ pub struct AppState {
     pub tray_acrylic_dark: AtomicBool,
     /// 托盘菜单锚点：右键时的光标物理坐标，菜单窗口底角定位依据
     pub menu_anchor: std::sync::Mutex<Option<(f64, f64)>>,
+    /// 前端最近一次实测的菜单逻辑高度；重开时沿用，避免先按粗估高度显示再跳动修正
+    pub menu_height: std::sync::Mutex<Option<f64>>,
     /// 级联子菜单行锚点：账号行相对主菜单卡片上沿的逻辑偏移，子菜单窗口纵向定位依据
     pub submenu_row_top: std::sync::Mutex<Option<f64>>,
 }

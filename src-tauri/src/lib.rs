@@ -56,10 +56,15 @@ pub fn run() {
                 // tauri.conf.json 静态 windowEffects 已应用亮色 acrylic
                 tray_acrylic_dark: AtomicBool::new(false),
                 menu_anchor: std::sync::Mutex::new(None),
+                menu_height: std::sync::Mutex::new(None),
                 submenu_row_top: std::sync::Mutex::new(None),
             });
 
             tray::setup_tray(&handle)?;
+
+            // 托盘窗口首次显示前就准备好当前主题的 Acrylic。每次弹出菜单时不再
+            // 重设窗口效果，避免 DWM 在 show() 附近重新合成造成暗色背景闪烁。
+            commands::apply_tray_theme_effects(&handle);
 
             // 菜单窗口 DWM 圆角：CSS 只切网页，窗口本身也要裁，
             // 否则亚克力铺满矩形、四角露出方形底（Win10 忽略，保持方形）

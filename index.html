@@ -64,7 +64,9 @@
          此处在首帧前同步读出并挂 dark 类；以 config 为准的校正在应用加载后进行 */
       try {
         if (location.hash.includes("tray-menu") || location.hash.includes("tray-submenu")) {
-          document.documentElement.classList.add("tray-window");
+          // 两个类都在首帧前挂上：组件样式中的暗色托盘选择器依赖
+          // s2a-tray-doc，延后到 Vue onMounted 会让暗色窗口先套用亮色卡片底。
+          document.documentElement.classList.add("tray-window", "s2a-tray-doc");
         }
         var pref = localStorage.getItem("s2akit-theme") || "light";
         var dark =

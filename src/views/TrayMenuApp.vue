@@ -58,6 +58,8 @@ function hide() {
 // 菜单只会缩小、再也长不回去。正确做法：非滚动铬（顶栏/分隔线/底部操作）
 // 取 offsetHeight，账号列表取自身 scrollHeight（滚动容器该值恒为内容全高）。
 let lastFitH = 0;
+let fitRaf: number | null = null;
+let fitForce = false;
 /** 菜单最小高度：10 行账号免滚动 + 实测铬（顶栏/分隔线/底部操作/边框），
  * 内容再少也不缩成一条缝，底部操作区永远贴着菜单底边 */
 const MIN_ROWS = 10;
@@ -83,7 +85,14 @@ async function fitToContent(force = false) {
   }
 }
 function scheduleFit(force = false) {
-  requestAnimationFrame(() => void fitToContent(force));
+  fitForce ||= force;
+  if (fitRaf !== null) return;
+  fitRaf = requestAnimationFrame(() => {
+    fitRaf = null;
+    const forceNow = fitForce;
+    fitForce = false;
+    void fitToContent(forceNow);
+  });
 }
 
 /** 悬停提示透明度跟随菜单不透明度设置（×85%），读配置即时生效 */
@@ -192,10 +201,12 @@ function flashList() {
   });
 }
 
-/** 重新加载菜单数据；refreshUsage=true 绕过后端缓存强制刷新顶部额度 */
-async function reload(refreshUsage = false) {
+/** 重新加载菜单数据；refreshUsage=true 绕过后端缓存强制刷新顶部额度；
+ * quiet=true 为弹出/挂载时的静默刷新：数据照换，但不展示进度条、不闪光，
+ * 避免每次右键都底部一亮 + 贴合跳动（用户主动刷新与切换分组仍保留反馈） */
+async function reload(refreshUsage = false, quiet = false) {
   closeSubmenu();
-  const doneBar = showLoadingBar();
+  const doneBar = quiet ? () => {} : showLoadingBar();
   loading.value = true;
   // 用量查询与账号列表并行，不阻塞主内容加载
   const usageP = invoke<KeyUsageToday | null>("get_usage_today", {
@@ -220,7 +231,7 @@ async function reload(refreshUsage = false) {
     scheduleFit();
     if (flashAfterLoad) {
       flashAfterLoad = false;
-      flashList();
+      if (!quiet) flashList();
     }
   }
 }
@@ -468,16 +479,11 @@ onMounted(async () => {
       // 每次弹出都回到账号列表：Rust 侧隐藏（再右键收起/失焦）不经过前端 hide()，
       // 子菜单展开态会残留，重开时收起（原生菜单行为）
       closeSubmenu();
-      // 原生菜单式淡入：窗口是 show/hide 复用不重挂载，这里手动重播
-      const cardEl = document.querySelector<HTMLElement>(".tray-menu-card");
-      if (cardEl) {
-        cardEl.classList.remove("menu-enter");
-        void cardEl.offsetWidth;
-        cardEl.classList.add("menu-enter");
-      }
-      // 每次弹出后端都会先按估算高度摆放窗口，需强制按当前内容重新贴合定位
-      scheduleFit(true);
-      void reload();
+      // Rust 已按缓存数据估算尺寸；等本帧 DOM 稳定后按实际高度校正，避免弹出瞬间
+      // 先强制提交一次尺寸、数据到达后又提交一次造成可见跳动。
+      scheduleFit();
+      // 弹出时的数据同步保持静默：窗口已经可见，进度条/闪光会被误认为主题重绘。
+      void reload(false, true);
     })
   );
   // 子菜单窗口悬停状态：滑入取消收起（含待切换，安全三角的落点侧），滑出延迟收起
@@ -550,11 +556,16 @@ onMounted(async () => {
   // 页面能执行到这里即证明加载成功，告知后端菜单存活
   void invoke("menu_pong");
   void applyTipAlpha();
-  void reload();
+  // 首次挂载发生在隐藏窗口中，同样不需要刷新反馈。
+  void reload(false, true);
 });
 onBeforeUnmount(() => {
   cancelClose();
   cancelOpen();
+  if (fitRaf !== null) {
+    window.cancelAnimationFrame(fitRaf);
+    fitRaf = null;
+  }
   unlistens.forEach((u) => u());
   ro?.disconnect();
   document.documentElement.classList.remove("s2a-tray-doc");
@@ -854,23 +865,6 @@ html.s2a-tray-doc body:focus-visible {
   /* 8px 与 DWM 窗口圆角（DWMWCP_ROUND）一致，窗口与卡片边缘严丝合缝 */
   border-radius: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-/* 主菜单弹出淡入（macOS 菜单式；关闭保持即时，不断连） */
-.menu-enter {
-  animation: tray-in 0.12s ease-out;
-}
-@keyframes tray-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .menu-enter {
-    animation: none;
-  }
 }
 /* 子菜单指示箭头：常态弱化，行展开/悬浮时加深 */
 .submenu-hint {
