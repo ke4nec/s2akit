@@ -60,6 +60,34 @@ async fn refresh_or_login(app: &AppHandle) -> AppResult<String> {
     }
 }
 
+// ---------- Linux 原生托盘菜单辅助 ----------
+
+/// 账号当前是否参与调度（原生菜单勾选态取反用）
+#[cfg(target_os = "linux")]
+pub fn account_schedulable(app: &AppHandle, account_id: i64) -> bool {
+    app.state::<AppState>()
+        .accounts
+        .read()
+        .unwrap()
+        .iter()
+        .find(|a| a.id == account_id)
+        .map(|a| a.schedulable)
+        .unwrap_or(false)
+}
+
+/// key 当前是否启用（原生菜单勾选态取反用）
+#[cfg(target_os = "linux")]
+pub fn key_enabled(app: &AppHandle, key_id: i64) -> bool {
+    app.state::<AppState>()
+        .keys
+        .read()
+        .unwrap()
+        .iter()
+        .find(|k| k.id == key_id)
+        .map(|k| k.status == "active")
+        .unwrap_or(false)
+}
+
 async fn ensure_token(app: &AppHandle) -> AppResult<String> {
     let state = app.state::<AppState>();
     if let Some(t) = state.valid_token() {
@@ -119,6 +147,8 @@ pub async fn refresh_accounts_task(app: &AppHandle) -> AppResult<Vec<AccountBrie
     *state.group_name.write().unwrap() = group_name;
     drop(state);
     let _ = app.emit("accounts-updated", &accounts);
+    // Linux 原生托盘菜单跟随账号/分组数据重建
+    crate::tray::refresh_native_menu(app);
     Ok(accounts)
 }
 
@@ -681,6 +711,7 @@ pub async fn login(
             store_auth(&state, auth);
             drop(state);
             let _ = app.emit("auth-changed", ());
+            preload_tray_data(&app);
             Ok(LoginReply {
                 user: Some(user),
                 requires_2fa: false,
@@ -707,13 +738,28 @@ pub async fn login_2fa(app: AppHandle, temp_token: String, code: String) -> AppR
     store_auth(&state, auth);
     drop(state);
     let _ = app.emit("auth-changed", ());
+    preload_tray_data(&app);
     Ok(user)
+}
+
+/// 登录成功后预载 Key 列表：前端登录流程只拉分组/账号，
+/// Linux 原生托盘菜单的 API Key 子菜单依赖 state.keys 才有内容
+fn preload_tray_data(app: &AppHandle) {
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = list_keys(handle).await;
+    });
 }
 
 #[tauri::command]
 pub async fn logout(app: AppHandle) {
     *app.state::<AppState>().auth.write().unwrap() = None;
+    // 清空托盘数据缓存并同步原生菜单，避免退出后残留可操作的旧列表
+    *app.state::<AppState>().accounts.write().unwrap() = Vec::new();
+    *app.state::<AppState>().keys.write().unwrap() = Vec::new();
+    *app.state::<AppState>().groups.write().unwrap() = Vec::new();
     let _ = app.emit("auth-changed", ());
+    crate::tray::refresh_native_menu(&app);
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -778,6 +824,8 @@ pub async fn list_groups(app: AppHandle) -> AppResult<Vec<GroupBrief>> {
     })
     .await?;
     *app.state::<AppState>().groups.write().unwrap() = groups.clone();
+    // Linux 原生托盘菜单跟随分组缓存重建
+    crate::tray::refresh_native_menu(&app);
     Ok(groups)
 }
 
@@ -805,6 +853,8 @@ pub async fn list_accounts(app: AppHandle, group_id: Option<i64>) -> AppResult<V
     if is_selected {
         *app.state::<AppState>().accounts.write().unwrap() = accounts.clone();
         let _ = app.emit("accounts-updated", &accounts);
+        // Linux 原生托盘菜单跟随账号缓存重建（登录后前端即走这里）
+        crate::tray::refresh_native_menu(&app);
     }
     Ok(accounts)
 }
@@ -847,6 +897,8 @@ pub async fn list_keys(app: AppHandle) -> AppResult<Vec<KeyBrief>> {
     })
     .await?;
     *app.state::<AppState>().keys.write().unwrap() = keys.clone();
+    // Linux 原生托盘菜单跟随 key 列表重建
+    crate::tray::refresh_native_menu(&app);
     Ok(keys)
 }
 
@@ -891,7 +943,9 @@ pub async fn tray_test_key(
     test_key_task(&app, key_id, &key_name, &key_secret, model).await
 }
 
-async fn test_key_task(
+/// key 测试任务（Linux 原生托盘菜单复用）
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) async fn test_key_task(
     app: &AppHandle,
     key_id: i64,
     key_name: &str,

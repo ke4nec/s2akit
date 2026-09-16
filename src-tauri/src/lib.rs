@@ -5,6 +5,8 @@ mod state;
 mod sub2api;
 mod tray;
 mod usage;
+#[cfg(target_os = "linux")]
+mod tray_menu_native;
 #[cfg(windows)]
 mod win_toast;
 

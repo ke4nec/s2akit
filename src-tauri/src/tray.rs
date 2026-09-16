@@ -29,14 +29,24 @@ fn estimate_menu_height(n: usize) -> f64 {
 }
 
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
-    TrayIconBuilder::with_id(TRAY_ID)
+    // 非 Linux 路径不对 builder 重新赋值，压制该平台的 unused_mut
+    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .icon(
             app.default_window_icon()
                 .expect("window icon missing")
                 .clone(),
         )
         .tooltip("s2akit - sub2api 账号工具")
-        .show_menu_on_left_click(false)
+        .show_menu_on_left_click(false);
+    // Linux：libappindicator 只有挂上 GTK 菜单才会注册托盘图标，且该后端
+    // 不派发点击事件（自绘菜单窗口无法触发），改用原生菜单承载交互
+    #[cfg(target_os = "linux")]
+    {
+        crate::tray_menu_native::init(app);
+        builder = builder.menu(&crate::tray_menu_native::build_menu(app)?);
+    }
+    builder
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button,
@@ -56,6 +66,15 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .build(app)?;
     Ok(())
 }
+
+/// Linux 原生托盘菜单重建入口（数据变化时由命令层调用；其他平台空实现）
+#[cfg(target_os = "linux")]
+pub fn refresh_native_menu(app: &AppHandle) {
+    crate::tray_menu_native::rebuild(app);
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn refresh_native_menu(_app: &AppHandle) {}
 
 /// 在托盘图标旁弹出半透明菜单窗口
 pub fn show_menu_window(app: &AppHandle, cursor: PhysicalPosition<f64>) {
