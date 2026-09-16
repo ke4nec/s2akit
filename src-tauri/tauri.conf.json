@@ -16,6 +16,7 @@
         "title": "s2akit",
         "visible": false,
         "decorations": false,
+        "backgroundColor": "#F2F3F5",
         "width": 1000,
         "height": 648,
         "minWidth": 1000,

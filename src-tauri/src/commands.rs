@@ -514,6 +514,26 @@ pub fn set_menu_opacity(app: AppHandle, opacity: f32) -> AppResult<()> {
 
 // ---------- 界面主题 ----------
 
+/// 主窗口原生底色跟随主题：decorations:false 时右下角 SE 缩放走隐形边框，
+/// OS 以原生刷新率改 HWND 尺寸，WebView2 重排重绘慢一拍，新露出的窄条还没有
+/// 网页像素，DWM 先显示窗口/WebView 底色（默认纯白）。设成与网页画布一致
+/// （亮 #F2F3F5 / 暗 #1A1A1C，与 index.html 启动底、theme.ts background 同值），
+/// 让未绘制区也是画布色，缩放白边即与背景融为一体
+pub fn apply_main_background(app: &AppHandle) {
+    let dark = app
+        .state::<AppState>()
+        .effective_dark
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let color = if dark {
+        tauri::window::Color(26, 26, 28, 255)
+    } else {
+        tauri::window::Color(242, 243, 245, 255)
+    };
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_background_color(Some(color));
+    }
+}
+
 /// 按当前生效明暗给托盘窗口应用 acrylic 效果色。acrylic 属 DWM 合成属性、
 /// 不受 tao show() 重置（与 WS_EX_LAYERED 不同），因此只在明暗实际变化时应用——
 /// 每次 show 重应用会触发一帧重绘闪烁。颜色参数仅 Win10 1903+ 生效，
@@ -583,6 +603,7 @@ pub fn set_theme(
     }
     drop(state);
     apply_tray_theme_effects(&app);
+    apply_main_background(&app);
     if changed {
         let _ = app.emit("theme-changed", theme);
     }
